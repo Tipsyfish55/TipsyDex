@@ -1054,31 +1054,12 @@ PlasmoidItem {
                                 color: "#777777"
                             }
                             
-                            RowLayout {
-                                Layout.fillWidth: true
-                                Kirigami.Heading {
-                                    text: "Moves"
-                                    level: 2
-                                    color: "#171717"
-                                }
-                                Item {
-                                    Layout.fillWidth: true
-                                }
-                                ComboBox {
-                                    id: genCombo
-                                    model: popup.availableGenerations
-                                    visible: popup.availableGenerations.length > 0
-                                    Layout.preferredWidth: 95
-                                    currentIndex: popup.availableGenerations.indexOf(popup.selectedGeneration)
-                                    onActivated: function(index) {
-                                        if (index >= 0 && index < popup.availableGenerations.length) {
-                                            popup.selectGeneration(popup.availableGenerations[index])
-                                        }
-                                    }
-                                }
+                            Kirigami.Heading {
+                                text: "Moves"
+                                level: 2
+                                color: "#171717"
                             }
 
-                            // Clickable Generation Pills (Failsafe if ComboBox popup is blocked by Plasma)
                             Flow {
                                 Layout.fillWidth: true
                                 spacing: 4
