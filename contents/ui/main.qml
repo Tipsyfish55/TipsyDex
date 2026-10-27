@@ -30,8 +30,12 @@ PlasmoidItem {
         implicitWidth: 210
         implicitHeight: 570
         
-        // Automatically inherit system dark mode preference, user can still override
-        property bool isDarkMode: Kirigami.Theme.colorSet === Kirigami.Theme.View ? (Kirigami.Theme.backgroundColor.r * 0.299 + Kirigami.Theme.backgroundColor.g * 0.587 + Kirigami.Theme.backgroundColor.b * 0.114 < 0.5) : false
+        // Robust system dark mode check based on window palette and Kirigami theme background luminance
+        property bool isDarkMode: {
+            const bg = Kirigami.Theme.backgroundColor
+            const luminance = (bg.r * 0.299 + bg.g * 0.587 + bg.b * 0.114)
+            return luminance < 0.5
+        }
 
         color: isDarkMode ? "#181818" : Kirigami.Theme.backgroundColor
         radius: Kirigami.Units.largeSpacing
@@ -1128,7 +1132,7 @@ PlasmoidItem {
 
                                             Item {
                                                 width: 56
-                                                height: 60
+                                                height: evoCol.height > 0 ? evoCol.height : 60
                                                 Column {
                                                     id: evoCol
                                                     width: 56
