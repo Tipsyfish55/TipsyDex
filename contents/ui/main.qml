@@ -228,15 +228,34 @@ PlasmoidItem {
                     }
                 }
 
-                for (let t = 0; t < mTypes.length; ++t) {
-                    let tName = titleCase(mTypes[t])
-                    let superEffectiveAgainst = offenseChart[tName] || []
-                    for (let s = 0; s < superEffectiveAgainst.length; ++s) {
-                        let target = superEffectiveAgainst[s]
-                        if (typeCoverageMap[target]) {
-                            let entryName = member.name + " (" + tName + ")"
-                            if (typeCoverageMap[target].indexOf(entryName) < 0) {
-                                typeCoverageMap[target].push(entryName)
+                // Base coverage on assigned moves' types
+                const moves = member.moves || []
+                if (moves.length > 0) {
+                    for (let m = 0; m < moves.length; ++m) {
+                        let mType = moves[m].moveType ? titleCase(moves[m].moveType) : ""
+                        let superEffectiveAgainst = offenseChart[mType] || []
+                        for (let s = 0; s < superEffectiveAgainst.length; ++s) {
+                            let target = superEffectiveAgainst[s]
+                            if (typeCoverageMap[target]) {
+                                let entryName = member.name + " (" + moves[m].name + ")"
+                                if (typeCoverageMap[target].indexOf(entryName) < 0) {
+                                    typeCoverageMap[target].push(entryName)
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // Fallback to member's own type if no moves assigned yet
+                    for (let t = 0; t < mTypes.length; ++t) {
+                        let tName = titleCase(mTypes[t])
+                        let superEffectiveAgainst = offenseChart[tName] || []
+                        for (let s = 0; s < superEffectiveAgainst.length; ++s) {
+                            let target = superEffectiveAgainst[s]
+                            if (typeCoverageMap[target]) {
+                                let entryName = member.name + " (" + tName + ")"
+                                if (typeCoverageMap[target].indexOf(entryName) < 0) {
+                                    typeCoverageMap[target].push(entryName)
+                                }
                             }
                         }
                     }
@@ -386,7 +405,8 @@ PlasmoidItem {
                 description: moveObj.description,
                 bgColor: moveObj.bgColor,
                 classLabel: moveObj.classLabel,
-                method: moveObj.method
+                method: moveObj.method,
+                moveType: moveObj.moveType || ""
             })
             currentTeam = nextTeam
             saveCurrentTeam()
@@ -711,6 +731,7 @@ PlasmoidItem {
                                     if (mxhr.readyState !== XMLHttpRequest.DONE) return
                                     let classColor = "#a8a878"
                                     let classType = "Status"
+                                    let mType = "Normal"
                                     let pwr = "-"
                                     let acc = "-"
                                     let desc = "No description available."
@@ -720,6 +741,10 @@ PlasmoidItem {
                                             let moveDetails = JSON.parse(mxhr.responseText)
                                             if (moveDetails.power !== null && moveDetails.power !== undefined) pwr = moveDetails.power
                                             if (moveDetails.accuracy !== null && moveDetails.accuracy !== undefined) acc = moveDetails.accuracy + "%"
+                                            if (moveDetails.type && moveDetails.type.name) {
+                                                mType = titleCase(moveDetails.type.name)
+                                                classColor = typeColor(moveDetails.type.name)
+                                            }
                                             
                                             if (moveDetails.flavor_text_entries) {
                                                 for (let f = 0; f < moveDetails.flavor_text_entries.length; ++f) {
@@ -732,13 +757,8 @@ PlasmoidItem {
 
                                             if (moveDetails.damage_class) {
                                                 let className = moveDetails.damage_class.name
-                                                if (className === "physical") {
-                                                    classColor = "#ff7f52"
-                                                    classType = "Physical"
-                                                } else if (className === "special") {
-                                                    classColor = "#705898"
-                                                    classType = "Special"
-                                                }
+                                                if (className === "physical") classType = "Physical"
+                                                else if (className === "special") classType = "Special"
                                             }
                                         } catch (e) {}
                                     }
@@ -757,7 +777,8 @@ PlasmoidItem {
                                         accuracy: acc,
                                         description: desc,
                                         bgColor: classColor,
-                                        classLabel: classType
+                                        classLabel: classType,
+                                        moveType: mType
                                     })
 
                                     pendingMovesCount--
@@ -1466,7 +1487,7 @@ PlasmoidItem {
                                     cursorShape: Qt.PointingHandCursor
                                     ToolTip.visible: containsMouse
                                     ToolTip.delay: 200
-                                    ToolTip.text: modelData.classLabel + " · " + modelData.method + "\nPwr: " + modelData.power + " | Acc: " + modelData.accuracy + "\n" + modelData.description
+                                    ToolTip.text: "[" + (modelData.moveType || "Normal") + "] " + modelData.classLabel + " · " + modelData.method + "\nPwr: " + modelData.power + " | Acc: " + modelData.accuracy + "\n" + modelData.description
                                     onClicked: popup.addMoveToActiveMember(modelData)
                                 }
                             }
@@ -1687,7 +1708,7 @@ PlasmoidItem {
                                             cursorShape: Qt.PointingHandCursor
                                             ToolTip.visible: containsMouse
                                             ToolTip.delay: 200
-                                            ToolTip.text: (modelData.classLabel || "Move") + " · " + (modelData.method || "") +
+                                            ToolTip.text: "[" + (modelData.moveType || "Normal") + "] " + (modelData.classLabel || "Move") + " · " + (modelData.method || "") +
                                                           "\nPower: " + modelData.power + " | Accuracy: " + modelData.accuracy +
                                                           "\n" + (modelData.description || "") +
                                                           "\n\nClick to remove"
