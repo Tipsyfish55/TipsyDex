@@ -53,11 +53,22 @@ PlasmoidItem {
         property bool searchEdited: false
         property int totalEvYield: 0
         property int lookupId: 0
+        
+        property var categorizedMoves: ({})
+        property string selectedGeneration: ""
+        property var availableGenerations: []
         property var learnableMoves: []
 
         Component.onCompleted: {
             loadPokemon("pikachu")
             loadSpeciesNames()
+        }
+
+        function selectGeneration(genName) {
+            if (!genName || !categorizedMoves[genName])
+                return
+            selectedGeneration = genName
+            learnableMoves = categorizedMoves[genName]
         }
 
         function titleCase(value) {
@@ -245,8 +256,15 @@ PlasmoidItem {
         }
 
         function loadPokemon(input) {
-            const normalized = input.trim().toLowerCase().replace(/\s+/g, "-")
-            if (!normalized)
+            let normalized = input.trim().toLowerCase()
+            if (normalized.startsWith("#")) {
+                normalized = parseInt(normalized.substring(1), 10).toString()
+            } else if (/^\d+$/.test(normalized)) {
+                normalized = parseInt(normalized, 10).toString()
+            } else {
+                normalized = normalized.replace(/\s+/g, "-")
+            }
+            if (!normalized || normalized === "NaN")
                 return
 
             lookupId += 1
@@ -265,6 +283,10 @@ PlasmoidItem {
             spriteUrl = ""
             shinyUrl = ""
             flavorText = ""
+            
+            categorizedMoves = {}
+            selectedGeneration = ""
+            availableGenerations = []
             learnableMoves = []
 
             requestJson("https://pokeapi.co/api/v2/pokemon/" + encodeURIComponent(normalized), requestId, function (pokemon) {
@@ -289,22 +311,76 @@ PlasmoidItem {
                 }
                 totalEvYield = evTotal
                 
-                learnableMoves = pokemon.moves.map(function (entry) {
-                    let versionSet = {}
-                    for (let v = 0; v < entry.version_group_details.length; ++v) {
-                        versionSet[titleCase(entry.version_group_details[v].version_group.name)] = true
-                    }
-                    let versions = Object.keys(versionSet)
+                const versionToGenMap = {
+                    "red-blue": "Gen 1", "yellow": "Gen 1",
+                    "gold-silver": "Gen 2", "crystal": "Gen 2",
+                    "ruby-sapphire": "Gen 3", "emerald": "Gen 3", "firered-leafgreen": "Gen 3", "colosseum": "Gen 3", "xd": "Gen 3",
+                    "diamond-pearl": "Gen 4", "platinum": "Gen 4", "heartgold-soulsilver": "Gen 4",
+                    "black-white": "Gen 5", "black-2-white-2": "Gen 5",
+                    "x-y": "Gen 6", "omega-ruby-alpha-sapphire": "Gen 6",
+                    "sun-moon": "Gen 7", "ultra-sun-ultra-moon": "Gen 7", "lets-go-pikachu-lets-go-eevee": "Gen 7",
+                    "sword-shield": "Gen 8", "brilliant-diamond-shining-pearl": "Gen 8", "legends-arceus": "Gen 8",
+                    "scarlet-violet": "Gen 9"
+                }
+
+                let tempCategorized = {
+                    "Gen 1": [], "Gen 2": [], "Gen 3": [],
+                    "Gen 4": [], "Gen 5": [], "Gen 6": [],
+                    "Gen 7": [], "Gen 8": [], "Gen 9": []
+                }
+
+                for (let m = 0; m < pokemon.moves.length; ++m) {
+                    let entry = pokemon.moves[m]
+                    let moveName = titleCase(entry.move.name)
                     
-                    let isCommon = versions.length >= 10 
-                    
-                    return {
-                        name: titleCase(entry.move.name),
-                        versionsList: versions.join(", "),
-                        bgColor: isCommon ? "#d4edda" : "#fff3cd",
-                        borderColor: isCommon ? "#c3e6cb" : "#ffeeba"
+                    for (let d = 0; d < entry.version_group_details.length; ++d) {
+                        let detail = entry.version_group_details[d]
+                        let versionName = detail.version_group.name
+                        let genName = versionToGenMap[versionName]
+
+                        if (genName) {
+                            let exists = false
+                            for (let k = 0; k < tempCategorized[genName].length; ++k) {
+                                if (tempCategorized[genName][k].name === moveName) {
+                                    exists = true
+                                    break
+                                }
+                            }
+                            
+                            if (!exists) {
+                                let methodRaw = detail.move_learn_method.name
+                                let method = titleCase(methodRaw)
+                                let bgColor = methodRaw === "level-up" ? "#d4edda" : (methodRaw === "machine" ? "#fff3cd" : "#d1ecf1")
+                                let borderColor = methodRaw === "level-up" ? "#c3e6cb" : (methodRaw === "machine" ? "#ffeeba" : "#bee5eb")
+                                
+                                tempCategorized[genName].push({
+                                    name: moveName,
+                                    method: method,
+                                    level: detail.level_learned_at,
+                                    bgColor: bgColor,
+                                    borderColor: borderColor
+                                })
+                            }
+                        }
                     }
-                })
+                }
+
+                let gens = []
+                for (let i = 1; i <= 9; ++i) {
+                    let g = "Gen " + i
+                    if (tempCategorized[g].length > 0) {
+                        tempCategorized[g].sort(function(a, b) {
+                            return a.name.localeCompare(b.name)
+                        })
+                        gens.push(g)
+                    }
+                }
+                
+                categorizedMoves = tempCategorized
+                availableGenerations = gens
+                if (gens.length > 0) {
+                    selectGeneration(gens[gens.length - 1])
+                }
 
                 const speciesName = pokemon.species.name
                 const fileName = speciesName
@@ -453,7 +529,7 @@ PlasmoidItem {
                             Layout.fillWidth: true
                             text: "pikachu"
                             leftPadding: 38
-                            placeholderText: "Search Pokémon…"
+                            placeholderText: "Search Name or #ID…"
                             focus: true
                             palette.text: "#171717"
                             palette.placeholderText: "#666666"
@@ -920,10 +996,10 @@ PlasmoidItem {
                                                     visible: modelData.requirements.length > 0
                                                         && (modelData.requirements[0].item.length > 0
                                                             || modelData.requirements[0].heldItem.length > 0)
-                                                    source: visible
+                                                    source: (visible
                                                         ? "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/"
                                                             + (modelData.requirements[0].item || modelData.requirements[0].heldItem) + ".png"
-                                                        : ""
+                                                        : "")
                                                     sourceSize.width: 18
                                                     sourceSize.height: 18
                                                     width: visible ? 18 : 0
@@ -977,11 +1053,65 @@ PlasmoidItem {
                                 Layout.fillWidth: true
                                 color: "#777777"
                             }
+                            
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Kirigami.Heading {
+                                    text: "Moves"
+                                    level: 2
+                                    color: "#171717"
+                                }
+                                Item {
+                                    Layout.fillWidth: true
+                                }
+                                ComboBox {
+                                    id: genCombo
+                                    model: popup.availableGenerations
+                                    visible: popup.availableGenerations.length > 0
+                                    Layout.preferredWidth: 95
+                                    currentIndex: popup.availableGenerations.indexOf(popup.selectedGeneration)
+                                    onActivated: function(index) {
+                                        if (index >= 0 && index < popup.availableGenerations.length) {
+                                            popup.selectGeneration(popup.availableGenerations[index])
+                                        }
+                                    }
+                                }
+                            }
 
-                            Kirigami.Heading {
-                                text: "Moves"
-                                level: 2
-                                color: "#171717"
+                            // Clickable Generation Pills (Failsafe if ComboBox popup is blocked by Plasma)
+                            Flow {
+                                Layout.fillWidth: true
+                                spacing: 4
+                                visible: popup.availableGenerations.length > 0
+
+                                Repeater {
+                                    model: popup.availableGenerations
+                                    delegate: Rectangle {
+                                        required property string modelData
+                                        readonly property bool isSelected: modelData === popup.selectedGeneration
+                                        radius: 4
+                                        height: genPillLabel.implicitHeight + 6
+                                        width: genPillLabel.implicitWidth + 10
+                                        color: isSelected ? "#e53935" : "#eeeeee"
+                                        border.color: isSelected ? "#b71c1c" : "#cccccc"
+                                        border.width: 1
+
+                                        Label {
+                                            id: genPillLabel
+                                            anchors.centerIn: parent
+                                            text: modelData
+                                            color: parent.isSelected ? "#ffffff" : "#171717"
+                                            font.bold: parent.isSelected
+                                            font.pixelSize: Kirigami.Theme.smallFont.pixelSize
+                                        }
+
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: popup.selectGeneration(modelData)
+                                        }
+                                    }
+                                }
                             }
 
                             Flow {
@@ -1012,7 +1142,7 @@ PlasmoidItem {
                                             hoverEnabled: true
                                             ToolTip.visible: containsMouse
                                             ToolTip.delay: 200
-                                            ToolTip.text: "Generations/Games:\n" + modelData.versionsList
+                                            ToolTip.text: (modelData.method === "Level Up" ? "Level " + modelData.level : modelData.method)
                                         }
                                     }
                                 }
