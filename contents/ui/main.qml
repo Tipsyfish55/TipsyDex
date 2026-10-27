@@ -74,6 +74,7 @@ PlasmoidItem {
         property var currentTeam: []
         property int selectedMemberIndex: -1
         property var teamWeaknesses: []
+        property var teamOffensiveCoverage: []
 
         Component.onCompleted: {
             initTeamDatabase()
@@ -97,9 +98,10 @@ PlasmoidItem {
             }
         }
 
-        function calculateTeamWeaknesses() {
+        function calculateTeamAnalysis() {
             if (!currentTeam || currentTeam.length === 0) {
                 teamWeaknesses = []
+                teamOffensiveCoverage = []
                 return
             }
 
@@ -109,65 +111,108 @@ PlasmoidItem {
             ]
 
             let weaknessMap = {}
-            for (let t = 0; t < allTypes.length; ++t) {
-                weaknessMap[allTypes[t]] = []
-            }
+            for (let t = 0; t < allTypes.length; ++t) weaknessMap[allTypes[t]] = []
+
+            let offensiveTypesCovered = {} // type -> list of moves hitting it super effectively
+            for (let t = 0; t < allTypes.length; ++t) offensiveTypesCovered[allTypes[t]] = []
 
             let membersProcessed = 0
             for (let i = 0; i < currentTeam.length; ++i) {
                 const member = currentTeam[i]
                 const memberTypes = member.types || []
-                if (memberTypes.length === 0) {
-                    membersProcessed++
-                    if (membersProcessed === currentTeam.length) finalizeWeaknesses(weaknessMap)
-                    continue
+
+                // 1. Calculate Defenses / Weaknesses
+                if (memberTypes.length > 0) {
+                    let memberMults = {}
+                    for (let t = 0; t < allTypes.length; ++t) memberMults[allTypes[t]] = 1
+
+                    let typesRemaining = memberTypes.length
+                    for (let mt = 0; mt < memberTypes.length; ++mt) {
+                        const tName = memberTypes[mt].toLowerCase()
+                        const xhr = new XMLHttpRequest()
+                        xhr.open("GET", "https://pokeapi.co/api/v2/type/" + tName)
+                        xhr.setRequestHeader("Accept", "application/json")
+                        xhr.onreadystatechange = function() {
+                            if (xhr.readyState !== XMLHttpRequest.DONE) return
+                            if (xhr.status >= 200 && xhr.status < 300) {
+                                try {
+                                    const data = JSON.parse(xhr.responseText)
+                                    const rel = data.damage_relations
+                                    const doubleFrom = rel.double_damage_from || []
+                                    const halfFrom = rel.half_damage_from || []
+                                    const noFrom = rel.no_damage_from || []
+
+                                    for (let d = 0; d < doubleFrom.length; ++d) memberMults[doubleFrom[d].name] *= 2
+                                    for (let h = 0; h < halfFrom.length; ++h) memberMults[halfFrom[h].name] *= 0.5
+                                    for (let n = 0; n < noFrom.length; ++n) memberMults[noFrom[n].name] *= 0
+                                } catch (e) {}
+                            }
+                            typesRemaining--
+                            if (typesRemaining === 0) {
+                                for (let t = 0; t < allTypes.length; ++t) {
+                                    if (memberMults[allTypes[t]] > 1) {
+                                        weaknessMap[allTypes[t]].push(member.name + " (" + memberMults[allTypes[t]] + "×)")
+                                    }
+                                }
+                                checkMemberDone()
+                            }
+                        }
+                        xhr.send()
+                    }
+                } else {
+                    checkMemberDone()
                 }
 
-                let memberMults = {}
-                for (let t = 0; t < allTypes.length; ++t) memberMults[allTypes[t]] = 1
-
-                let typesRemaining = memberTypes.length
-                for (let mt = 0; mt < memberTypes.length; ++mt) {
-                    const tName = memberTypes[mt].toLowerCase()
-                    const xhr = new XMLHttpRequest()
-                    xhr.open("GET", "https://pokeapi.co/api/v2/type/" + tName)
-                    xhr.setRequestHeader("Accept", "application/json")
-                    xhr.onreadystatechange = function() {
-                        if (xhr.readyState !== XMLHttpRequest.DONE) return
-                        if (xhr.status >= 200 && xhr.status < 300) {
+                // 2. Calculate Offensive Move Types Coverage
+                const memberMoves = member.moves || []
+                for (let m = 0; m < memberMoves.length; ++m) {
+                    const moveName = memberMoves[m].name.toLowerCase().replace(/\s+/g, "-")
+                    const mxhr = new XMLHttpRequest()
+                    mxhr.open("GET", "https://pokeapi.co/api/v2/move/" + moveName)
+                    mxhr.setRequestHeader("Accept", "application/json")
+                    mxhr.onreadystatechange = function() {
+                        if (mxhr.readyState !== XMLHttpRequest.DONE) return
+                        if (mxhr.status >= 200 && mxhr.status < 300) {
                             try {
-                                const data = JSON.parse(xhr.responseText)
-                                const rel = data.damage_relations
-                                const doubleFrom = rel.double_damage_from || []
-                                const halfFrom = rel.half_damage_from || []
-                                const noFrom = rel.no_damage_from || []
-
-                                for (let d = 0; d < doubleFrom.length; ++d) {
-                                    memberMults[doubleFrom[d].name] *= 2
-                                }
-                                for (let h = 0; h < halfFrom.length; ++h) {
-                                    memberMults[halfFrom[h].name] *= 0.5
-                                }
-                                for (let n = 0; n < noFrom.length; ++n) {
-                                    memberMults[noFrom[n].name] *= 0
+                                const moveData = JSON.parse(mxhr.responseText)
+                                if (moveData.type && moveData.type.name) {
+                                    const moveType = moveData.type.name
+                                    // Fetch type efficacy for this move type to see what it hits super effectively
+                                    const txhr = new XMLHttpRequest()
+                                    txhr.open("GET", "https://pokeapi.co/api/v2/type/" + moveType)
+                                    txhr.setRequestHeader("Accept", "application/json")
+                                    txhr.onreadystatechange = function() {
+                                        if (txhr.readyState !== XMLHttpRequest.DONE) return
+                                        if (txhr.status >= 200 && txhr.status < 300) {
+                                            try {
+                                                const typeData = JSON.parse(txhr.responseText)
+                                                const doubleTo = typeData.damage_relations.double_damage_to || []
+                                                for (let dt = 0; dt < doubleTo.length; ++dt) {
+                                                    const targetType = doubleTo[dt].name
+                                                    if (offensiveTypesCovered[targetType]) {
+                                                        const entryStr = member.name + " (" + memberMoves[m].name + ")"
+                                                        if (offensiveTypesCovered[targetType].indexOf(entryStr) < 0) {
+                                                            offensiveTypesCovered[targetType].push(entryStr)
+                                                        }
+                                                    }
+                                                }
+                                                updateOffensiveCoverageView(offensiveTypesCovered)
+                                            } catch (e) {}
+                                        }
+                                    }
+                                    txhr.send()
                                 }
                             } catch (e) {}
                         }
-                        typesRemaining--
-                        if (typesRemaining === 0) {
-                            for (let t = 0; t < allTypes.length; ++t) {
-                                if (memberMults[allTypes[t]] > 1) {
-                                    if (!weaknessMap[allTypes[t]]) weaknessMap[allTypes[t]] = []
-                                    weaknessMap[allTypes[t]].push(member.name + " (" + memberMults[allTypes[t]] + "×)")
-                                }
-                            }
-                            membersProcessed++
-                            if (membersProcessed === currentTeam.length) {
-                                finalizeWeaknesses(weaknessMap)
-                            }
-                        }
                     }
-                    xhr.send()
+                    mxhr.send()
+                }
+            }
+
+            function checkMemberDone() {
+                membersProcessed++
+                if (membersProcessed === currentTeam.length) {
+                    finalizeWeaknesses(weaknessMap)
                 }
             }
         }
@@ -187,6 +232,23 @@ PlasmoidItem {
             }
             res.sort(function(a, b) { return b.count - a.count })
             teamWeaknesses = res
+        }
+
+        function updateOffensiveCoverageView(map) {
+            let res = []
+            for (let type in map) {
+                if (map[type].length > 0) {
+                    res.push({
+                        name: titleCase(type),
+                        count: map[type].length,
+                        movesList: map[type].join(", "),
+                        color: typeColor(type),
+                        textColor: typeTextColor(type)
+                    })
+                }
+            }
+            res.sort(function(a, b) { return b.count - a.count })
+            teamOffensiveCoverage = res
         }
 
         function syncSelectionWithLoadedPokemon() {
@@ -221,7 +283,7 @@ PlasmoidItem {
                 currentTeam = []
             }
             syncSelectionWithLoadedPokemon()
-            calculateTeamWeaknesses()
+            calculateTeamAnalysis()
         }
 
         function saveCurrentTeam() {
@@ -231,7 +293,7 @@ PlasmoidItem {
                     tx.executeSql('INSERT OR REPLACE INTO team_slots (slot, data) VALUES (?, ?);',
                         [activeTeamSlot, JSON.stringify(currentTeam)])
                 })
-                calculateTeamWeaknesses()
+                calculateTeamAnalysis()
             } catch (e) {
                 console.log("Save Error: " + e)
             }
@@ -247,6 +309,7 @@ PlasmoidItem {
                 types: JSON.parse(JSON.stringify(types)),
                 sprite: spriteUrl.length > 0 ? spriteUrl : spriteForName(cleanSlug),
                 fallbackSprite: spriteForName(cleanSlug),
+                item: "",
                 moves: []
             })
             currentTeam = nextTeam
@@ -262,6 +325,15 @@ PlasmoidItem {
             nextTeam.splice(idx, 1)
             currentTeam = nextTeam
             syncSelectionWithLoadedPokemon()
+            saveCurrentTeam()
+        }
+
+        function updateActiveMemberItem(itemName) {
+            if (selectedMemberIndex < 0 || selectedMemberIndex >= currentTeam.length)
+                return
+            let nextTeam = JSON.parse(JSON.stringify(currentTeam))
+            nextTeam[selectedMemberIndex].item = itemName
+            currentTeam = nextTeam
             saveCurrentTeam()
         }
 
@@ -495,343 +567,6 @@ PlasmoidItem {
             for (let i = 0; i < node.evolves_to.length; ++i)
                 result.children.push(parseEvolution(node.evolves_to[i]))
             return result
-        }
-
-        function loadPokemon(input, targetSlotIndex) {
-            let normalized = input.trim().toLowerCase()
-            if (normalized.startsWith("#")) {
-                normalized = parseInt(normalized.substring(1), 10).toString()
-            } else if (/^\d+$/.test(normalized)) {
-                normalized = parseInt(normalized, 10).toString()
-            } else {
-                normalized = normalized.replace(/\s+/g, "-")
-            }
-            if (!normalized || normalized === "NaN")
-                return
-
-            lookupId += 1
-            const requestId = lookupId
-            statusText = "Looking up " + titleCase(normalized) + "…"
-            errorText = ""
-            pokemonName = ""
-            pokemonId = ""
-            types = []
-            typeDefenses = []
-            stats = []
-            evolutionRoot = null
-            searchSuggestions = []
-            searchEdited = false
-            totalEvYield = 0
-            spriteUrl = ""
-            shinyUrl = ""
-            animatedUrl = ""
-            animatedShinyUrl = ""
-            flavorText = ""
-            
-            categorizedMoves = {}
-            selectedGeneration = ""
-            availableGenerations = []
-            learnableMoves = []
-
-            requestJson("https://pokeapi.co/api/v2/pokemon/" + encodeURIComponent(normalized), requestId, function (pokemon) {
-                pokemonName = titleCase(pokemon.name)
-                pokemonId = "#" + String(pokemon.id).padStart(4, "0")
-                heightText = (pokemon.height / 10).toFixed(1) + " m"
-                weightText = (pokemon.weight / 10).toFixed(1) + " kg"
-                types = pokemon.types.map(function (entry) {
-                    return titleCase(entry.type.name)
-                })
-                loadTypeDefenses(pokemon.types, requestId)
-                
-                const statAbbrMap = {
-                    "hp": "HP",
-                    "attack": "Atk",
-                    "defense": "Def",
-                    "special-attack": "Sp.Atk",
-                    "special-defense": "Sp.Def",
-                    "speed": "Speed"
-                }
-
-                stats = pokemon.stats.map(function (entry) {
-                    return {
-                        name: statAbbrMap[entry.stat.name] || titleCase(entry.stat.name),
-                        base: entry.base_stat,
-                        ev: entry.effort
-                    }
-                })
-                let evTotal = 0
-                for (let i = 0; i < stats.length; ++i) {
-                    evTotal += stats[i].ev
-                }
-                totalEvYield = evTotal
-
-                if (targetSlotIndex !== undefined && targetSlotIndex >= 0 && targetSlotIndex < currentTeam.length) {
-                    selectedMemberIndex = targetSlotIndex
-                } else {
-                    syncSelectionWithLoadedPokemon()
-                }
-                
-                const versionToGenMap = {
-                    "red-blue": "Gen 1", "yellow": "Gen 1",
-                    "gold-silver": "Gen 2", "crystal": "Gen 2",
-                    "ruby-sapphire": "Gen 3", "emerald": "Gen 3", "firered-leafgreen": "Gen 3", "colosseum": "Gen 3", "xd": "Gen 3",
-                    "diamond-pearl": "Gen 4", "platinum": "Gen 4", "heartgold-soulsilver": "Gen 4",
-                    "black-white": "Gen 5", "black-2-white-2": "Gen 5",
-                    "x-y": "Gen 6", "omega-ruby-alpha-sapphire": "Gen 6",
-                    "sun-moon": "Gen 7", "ultra-sun-ultra-moon": "Gen 7", "lets-go-pikachu-lets-go-eevee": "Gen 7",
-                    "sword-shield": "Gen 8", "brilliant-diamond-shining-pearl": "Gen 8", "legends-arceus": "Gen 8",
-                    "scarlet-violet": "Gen 9"
-                }
-
-                let tempCategorized = {
-                    "Gen 1": [], "Gen 2": [], "Gen 3": [],
-                    "Gen 4": [], "Gen 5": [], "Gen 6": [],
-                    "Gen 7": [], "Gen 8": [], "Gen 9": []
-                }
-
-                let seenPerGen = {
-                    "Gen 1": {}, "Gen 2": {}, "Gen 3": {},
-                    "Gen 4": {}, "Gen 5": {}, "Gen 6": {},
-                    "Gen 7": {}, "Gen 8": {}, "Gen 9": {}
-                }
-
-                let pendingMovesCount = 0
-
-                for (let m = 0; m < pokemon.moves.length; ++m) {
-                    let entry = pokemon.moves[m]
-                    let moveName = titleCase(entry.move.name.replace(/-/g, " "))
-                    let moveUrl = entry.move.url
-
-                    for (let d = 0; d < entry.version_group_details.length; ++d) {
-                        let detail = entry.version_group_details[d]
-                        let genName = versionToGenMap[detail.version_group.name]
-
-                        if (genName) {
-                            let methodRaw = detail.move_learn_method.name
-                            let level = detail.level_learned_at || 0
-
-                            if (seenPerGen[genName][moveName]) {
-                                if (methodRaw === "level-up" && level > 0) {
-                                    let existingObj = tempCategorized[genName].find(function(item) { return item.name === moveName })
-                                    if (existingObj && existingObj.level === 0) {
-                                        existingObj.method = "Level Up"
-                                        existingObj.level = level
-                                        existingObj.displayText = moveName + " · Lv. " + level
-                                    }
-                                }
-                                continue
-                            }
-
-                            seenPerGen[genName][moveName] = true
-                            pendingMovesCount++
-
-                            (function(targetGen, mvName, learnMethod, lvl, url) {
-                                const mxhr = new XMLHttpRequest()
-                                mxhr.open("GET", url)
-                                mxhr.setRequestHeader("Accept", "application/json")
-                                mxhr.onreadystatechange = function () {
-                                    if (mxhr.readyState !== XMLHttpRequest.DONE) return
-                                    let classColor = "#a8a878"
-                                    let classType = "Status"
-                                    let pwr = "-"
-                                    let acc = "-"
-                                    let desc = "No description available."
-
-                                    if (mxhr.status >= 200 && mxhr.status < 300) {
-                                        try {
-                                            let moveDetails = JSON.parse(mxhr.responseText)
-                                            if (moveDetails.power !== null && moveDetails.power !== undefined) pwr = moveDetails.power
-                                            if (moveDetails.accuracy !== null && moveDetails.accuracy !== undefined) acc = moveDetails.accuracy + "%"
-                                            
-                                            if (moveDetails.flavor_text_entries) {
-                                                for (let f = 0; f < moveDetails.flavor_text_entries.length; ++f) {
-                                                    if (moveDetails.flavor_text_entries[f].language.name === "en") {
-                                                        desc = moveDetails.flavor_text_entries[f].flavor_text.replace(/[\n\f\r]/g, " ")
-                                                        break
-                                                    }
-                                                }
-                                            }
-
-                                            if (moveDetails.damage_class) {
-                                                let className = moveDetails.damage_class.name
-                                                if (className === "physical") {
-                                                    classColor = "#ff7f52"
-                                                    classType = "Physical"
-                                                } else if (className === "special") {
-                                                    classColor = "#705898"
-                                                    classType = "Special"
-                                                }
-                                            }
-                                        } catch (e) {}
-                                    }
-
-                                    let formattedDisplay = mvName
-                                    if (learnMethod === "level-up" && lvl > 0) {
-                                        formattedDisplay = mvName + " · Lv. " + lvl
-                                    }
-
-                                    targetGen.push({
-                                        name: mvName,
-                                        displayText: formattedDisplay,
-                                        method: titleCase(learnMethod.replace(/-/g, " ")),
-                                        level: lvl,
-                                        power: pwr,
-                                        accuracy: acc,
-                                        description: desc,
-                                        bgColor: classColor,
-                                        classLabel: classType
-                                    })
-
-                                    pendingMovesCount--
-                                    if (pendingMovesCount === 0) {
-                                        sortAndFinalizeAllGenerations()
-                                    }
-                                }
-                                mxhr.send()
-                            })(tempCategorized[genName], moveName, methodRaw, level, moveUrl)
-                        }
-                    }
-                }
-
-                if (pendingMovesCount === 0) {
-                    sortAndFinalizeAllGenerations()
-                }
-
-                function sortAndFinalizeAllGenerations() {
-                    let gens = []
-                    for (let i = 1; i <= 9; ++i) {
-                        let g = "Gen " + i
-                        if (tempCategorized[g].length > 0) {
-                            tempCategorized[g].sort(function(a, b) {
-                                let aHasLevel = (a.level > 0 || a.method.toLowerCase().includes("level"));
-                                let bHasLevel = (b.level > 0 || b.method.toLowerCase().includes("level"));
-
-                                if (aHasLevel && bHasLevel) {
-                                    return a.level - b.level;
-                                }
-                                if (aHasLevel) {
-                                    return -1;
-                                }
-                                if (bHasLevel) {
-                                    return 1;
-                                }
-                                return a.name.localeCompare(b.name);
-                            });
-                            gens.push(g)
-                        }
-                    }
-                    categorizedMoves = tempCategorized
-                    availableGenerations = gens
-                    if (gens.length > 0) {
-                        selectGeneration(gens[gens.length - 1])
-                    }
-                }
-
-                const speciesName = pokemon.species.name
-                spriteUrl = (pokemon.sprites && pokemon.sprites.front_default)
-                    ? pokemon.sprites.front_default
-                    : "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/" + pokemon.id + ".png"
-                shinyUrl = (pokemon.sprites && pokemon.sprites.front_shiny)
-                    ? pokemon.sprites.front_shiny
-                    : "https://img.pokemondb.net/sprites/home/shiny/" + speciesName + ".png"
-                animatedUrl = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/showdown/" + pokemon.id + ".gif"
-                animatedShinyUrl = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/showdown/shiny/" + pokemon.id + ".gif"
-                
-                requestJson(pokemon.species.url, requestId, function (species) {
-                    const entries = species.flavor_text_entries || []
-                    let flavor = ""
-                    for (let i = 0; i < entries.length; ++i) {
-                        if (entries[i].language.name === "en") {
-                            flavor = entries[i].flavor_text.replace(/[\n\f\r]/g, " ")
-                            break
-                        }
-                    }
-                    flavorText = flavor
-                    requestJson(species.evolution_chain.url, requestId, function (chain) {
-                        evolutionRoot = parseEvolution(chain.chain)
-                        statusText = ""
-                    })
-                })
-            })
-        }
-
-        function evolutionPaths(node, path, output) {
-            if (!node)
-                return output
-            const nextPath = path.concat([node])
-            if (node.children.length === 0) {
-                output.push(nextPath)
-                return output
-            }
-            for (let i = 0; i < node.children.length; ++i)
-                evolutionPaths(node.children[i], nextPath, output)
-            return output
-        }
-
-        function requirementText(requirement) {
-            const parts = []
-            if (requirement.level)
-                parts.push("Lv. " + requirement.level)
-            if (requirement.item)
-                parts.push(titleCase(requirement.item))
-            if (requirement.heldItem)
-                parts.push("Hold " + titleCase(requirement.heldItem))
-            if (requirement.happiness)
-                parts.push("Friendship " + requirement.happiness)
-            if (requirement.affection)
-                parts.push("Affection " + requirement.affection)
-            if (requirement.beauty)
-                parts.push("Beauty " + requirement.beauty)
-            if (requirement.gender)
-                parts.push(requirement.gender === 1 ? "Female" : "Male")
-            if (requirement.timeOfDay)
-                parts.push(titleCase(requirement.timeOfDay))
-            if (requirement.location)
-                parts.push(titleCase(requirement.location))
-            if (requirement.knownMove)
-                parts.push(titleCase(requirement.knownMove))
-            if (requirement.knownMoveType)
-                parts.push(titleCase(requirement.knownMoveType) + " move")
-            if (requirement.partySpecies)
-                parts.push("Party: " + titleCase(requirement.partySpecies))
-            if (requirement.partyType)
-                parts.push(titleCase(requirement.partyType) + " in party")
-            if (requirement.tradeSpecies)
-                parts.push("Trade for " + titleCase(requirement.tradeSpecies))
-            if (requirement.relativeStats !== null) {
-                const statRelation = ["Attack < Defense", "Attack = Defense", "Attack > Defense"]
-                parts.push(statRelation[requirement.relativeStats + 1])
-            }
-            if (requirement.rain)
-                parts.push("Rain")
-            if (requirement.multiplayer)
-                parts.push("Multiplayer")
-            if (requirement.upsideDown)
-                parts.push("Turn upside down")
-            if (requirement.trigger === "trade" && !requirement.item && !requirement.heldItem)
-                parts.push("Trade")
-            else if (requirement.trigger === "use-item" && !requirement.item)
-                parts.push("Use an item")
-            else if (requirement.trigger === "level-up" && !requirement.level)
-                parts.push("Level up")
-            return parts.join(" · ")
-        }
-
-        function shortRequirement(requirements) {
-            if (!requirements || requirements.length === 0)
-                return "Trade"
-            const first = requirements[0]
-            if (first.level)
-                return "Lv. " + first.level
-            if (first.item)
-                return titleCase(first.item)
-            if (first.heldItem)
-                return titleCase(first.heldItem)
-            if (first.happiness)
-                return "Friendship"
-            if (first.trigger === "trade")
-                return "Trade"
-            return requirementText(first)
         }
 
         ColumnLayout {
@@ -1707,7 +1442,7 @@ PlasmoidItem {
                                             ToolTip.visible: containsMouse
                                             ToolTip.delay: 200
                                             ToolTip.text: slotCard.hasMember
-                                                ? (slotCard.member.name + " (" + (slotCard.member.moves ? slotCard.member.moves.length : 0) + "/4 moves)\nClick to load & edit moves")
+                                                ? (slotCard.member.name + (slotCard.member.item ? " @ " + slotCard.member.item : "") + "\n(" + (slotCard.member.moves ? slotCard.member.moves.length : 0) + "/4 moves)\nClick to load & edit")
                                                 : ("Add " + popup.pokemonName + " to slot " + (slotCard.index + 1))
                                             onClicked: {
                                                 if (slotCard.hasMember) {
@@ -1752,18 +1487,18 @@ PlasmoidItem {
                                 }
                             }
 
-                            // Active Team Member's 4 Move Slots
+                            // Active Team Member's Held Item & Moves
                             Rectangle {
                                 visible: popup.selectedMemberIndex >= 0 && popup.selectedMemberIndex < popup.currentTeam.length
                                 Layout.fillWidth: true
-                                implicitHeight: memberMovesCol.implicitHeight + 12
+                                implicitHeight: memberDetailsCol.implicitHeight + 12
                                 radius: 6
                                 color: popup.isDarkMode ? "#222222" : "#f5f5f5"
                                 border.color: popup.isDarkMode ? "#383838" : "#dddddd"
                                 border.width: 1
 
                                 ColumnLayout {
-                                    id: memberMovesCol
+                                    id: memberDetailsCol
                                     anchors.fill: parent
                                     anchors.margins: 6
                                     spacing: 4
@@ -1771,14 +1506,34 @@ PlasmoidItem {
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Label {
-                                            Layout.fillWidth: true
                                             text: (popup.selectedMemberIndex >= 0 && popup.selectedMemberIndex < popup.currentTeam.length)
-                                                ? (popup.currentTeam[popup.selectedMemberIndex].name + "'s Moves (" + popup.currentTeam[popup.selectedMemberIndex].moves.length + "/4)")
+                                                ? popup.currentTeam[popup.selectedMemberIndex].name
                                                 : ""
                                             font.bold: true
                                             font.pixelSize: Kirigami.Theme.smallFont.pixelSize
                                             color: popup.isDarkMode ? "#ffffff" : "#171717"
-                                            elide: Text.ElideRight
+                                        }
+
+                                        Item { Layout.fillWidth: true }
+
+                                        // Held Item Input Field
+                                        TextField {
+                                            id: itemField
+                                            Layout.preferredWidth: 110
+                                            Layout.preferredHeight: 24
+                                            placeholderText: "Held Item…"
+                                            font.pixelSize: 10
+                                            text: (popup.selectedMemberIndex >= 0 && popup.selectedMemberIndex < popup.currentTeam.length)
+                                                ? (popup.currentTeam[popup.selectedMemberIndex].item || "")
+                                                : ""
+                                            palette.text: popup.isDarkMode ? "#ffffff" : "#171717"
+                                            palette.placeholderText: popup.isDarkMode ? "#888888" : "#777777"
+                                            palette.base: popup.isDarkMode ? "#2d2d2d" : "#ffffff"
+                                            onTextChanged: {
+                                                if (popup.selectedMemberIndex >= 0 && popup.selectedMemberIndex < popup.currentTeam.length) {
+                                                    popup.updateActiveMemberItem(text)
+                                                }
+                                            }
                                         }
                                     }
 
@@ -1878,6 +1633,54 @@ PlasmoidItem {
                                                 ToolTip.visible: containsMouse
                                                 ToolTip.delay: 200
                                                 ToolTip.text: "Vulnerable Pokémon:\n" + modelData.pokemonList
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // --- TEAM OFFENSIVE COVERAGE SUMMARY ---
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                visible: popup.teamOffensiveCoverage.length > 0
+                                spacing: 4
+
+                                Kirigami.Heading {
+                                    text: "Offensive Coverage (Super Effective)"
+                                    level: 3
+                                    color: popup.isDarkMode ? "#ffffff" : "#171717"
+                                }
+
+                                Flow {
+                                    Layout.fillWidth: true
+                                    spacing: 4
+                                    Repeater {
+                                        model: popup.teamOffensiveCoverage
+                                        delegate: Rectangle {
+                                            required property var modelData
+                                            radius: 4
+                                            height: covLbl.implicitHeight + 6
+                                            width: covLbl.implicitWidth + 10
+                                            color: modelData.color
+                                            border.color: "#222222"
+                                            border.width: 1
+
+                                            Label {
+                                                id: covLbl
+                                                anchors.centerIn: parent
+                                                text: modelData.name + " (" + modelData.count + ")"
+                                                color: modelData.textColor
+                                                font.bold: true
+                                                font.pixelSize: 10
+                                            }
+
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
+                                                ToolTip.visible: containsMouse
+                                                ToolTip.delay: 200
+                                                ToolTip.text: "Hits Super Effective via:\n" + modelData.movesList
                                             }
                                         }
                                     }
