@@ -865,7 +865,7 @@ PlasmoidItem {
                     RowLayout {
                         Layout.fillWidth: true
                         Kirigami.Heading {
-                            text: "PlasmaDex"
+                            text: "TipsyDex"
                             level: 2
                             Layout.fillWidth: true
                             color: "#ffffff"
