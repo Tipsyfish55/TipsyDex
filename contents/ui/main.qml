@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.LocalStorage
 import org.kde.plasma.plasmoid
 import org.kde.kirigami as Kirigami
 
@@ -68,9 +69,122 @@ PlasmoidItem {
         property var availableGenerations: []
         property var learnableMoves: []
 
+        // Sleek Auto-Saving Team Builder State
+        property int activeTeamSlot: 1
+        property var currentTeam: []
+        property int selectedMemberIndex: -1
+
         Component.onCompleted: {
+            initTeamDatabase()
             loadPokemon("charmander")
             loadSpeciesNames()
+        }
+
+        function getDatabase() {
+            return LocalStorage.openDatabaseSync("PlasmaDexTeamsDB", "1.0", "Persistent Pokemon Teams", 1000000)
+        }
+
+        function initTeamDatabase() {
+            try {
+                const db = getDatabase()
+                db.transaction(function(tx) {
+                    tx.executeSql('CREATE TABLE IF NOT EXISTS team_slots (slot INTEGER PRIMARY KEY, data TEXT);')
+                })
+                loadTeamSlot(1)
+            } catch (e) {
+                console.log("DB Error: " + e)
+            }
+        }
+
+        function loadTeamSlot(slotNum) {
+            activeTeamSlot = slotNum
+            try {
+                const db = getDatabase()
+                db.transaction(function(tx) {
+                    const rs = tx.executeSql('SELECT data FROM team_slots WHERE slot = ?;', [slotNum])
+                    if (rs.rows.length > 0) {
+                        currentTeam = JSON.parse(rs.rows.item(0).data || "[]")
+                    } else {
+                        currentTeam = []
+                    }
+                })
+            } catch (e) {
+                currentTeam = []
+            }
+            selectedMemberIndex = currentTeam.length > 0 ? 0 : -1
+        }
+
+        function saveCurrentTeam() {
+            try {
+                const db = getDatabase()
+                db.transaction(function(tx) {
+                    tx.executeSql('INSERT OR REPLACE INTO team_slots (slot, data) VALUES (?, ?);',
+                        [activeTeamSlot, JSON.stringify(currentTeam)])
+                })
+            } catch (e) {
+                console.log("Save Error: " + e)
+            }
+        }
+
+        function addPokemonToTeam() {
+            if (!pokemonName || currentTeam.length >= 6)
+                return
+            let nextTeam = currentTeam.slice()
+            nextTeam.push({
+                name: pokemonName,
+                sprite: spriteUrl,
+                moves: []
+            })
+            currentTeam = nextTeam
+            selectedMemberIndex = currentTeam.length - 1
+            saveCurrentTeam()
+        }
+
+        function removePokemonFromTeam(idx) {
+            if (idx < 0 || idx >= currentTeam.length)
+                return
+            let nextTeam = currentTeam.slice()
+            nextTeam.splice(idx, 1)
+            currentTeam = nextTeam
+            if (selectedMemberIndex >= currentTeam.length) {
+                selectedMemberIndex = currentTeam.length - 1
+            }
+            saveCurrentTeam()
+        }
+
+        function addMoveToActiveMember(moveObj) {
+            if (selectedMemberIndex < 0 || selectedMemberIndex >= currentTeam.length)
+                return
+            let nextTeam = JSON.parse(JSON.stringify(currentTeam))
+            let member = nextTeam[selectedMemberIndex]
+            if (!member.moves)
+                member.moves = []
+            if (member.moves.length >= 4)
+                return
+            for (let i = 0; i < member.moves.length; ++i) {
+                if (member.moves[i].name === moveObj.name)
+                    return
+            }
+            member.moves.push({
+                name: moveObj.name,
+                power: moveObj.power,
+                accuracy: moveObj.accuracy,
+                description: moveObj.description,
+                bgColor: moveObj.bgColor,
+                classLabel: moveObj.classLabel,
+                method: moveObj.method
+            })
+            currentTeam = nextTeam
+            saveCurrentTeam()
+        }
+
+        function removeMoveFromActiveMember(moveIdx) {
+            if (selectedMemberIndex < 0 || selectedMemberIndex >= currentTeam.length)
+                return
+            let nextTeam = JSON.parse(JSON.stringify(currentTeam))
+            nextTeam[selectedMemberIndex].moves.splice(moveIdx, 1)
+            currentTeam = nextTeam
+            saveCurrentTeam()
         }
 
         function selectGeneration(genName) {
@@ -1213,10 +1327,21 @@ PlasmoidItem {
                                 color: popup.isDarkMode ? "#333333" : "#777777"
                             }
                             
-                            Kirigami.Heading {
-                                text: "Moves"
-                                level: 2
-                                color: popup.isDarkMode ? "#ffffff" : "#171717"
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Kirigami.Heading {
+                                    text: "Moves"
+                                    level: 2
+                                    Layout.fillWidth: true
+                                    color: popup.isDarkMode ? "#ffffff" : "#171717"
+                                }
+                                Label {
+                                    visible: popup.selectedMemberIndex >= 0 && popup.selectedMemberIndex < popup.currentTeam.length
+                                    text: "Click move → " + (popup.selectedMemberIndex >= 0 && popup.selectedMemberIndex < popup.currentTeam.length ? popup.currentTeam[popup.selectedMemberIndex].name : "")
+                                    font.pixelSize: 10
+                                    color: "#e53935"
+                                    font.bold: true
+                                }
                             }
 
                             Flow {
@@ -1285,7 +1410,281 @@ PlasmoidItem {
                                             ToolTip.delay: 200
                                             ToolTip.text: modelData.classLabel + " · " + modelData.method + 
                                                           "\nPower: " + modelData.power + " | Accuracy: " + modelData.accuracy + 
-                                                          "\n" + modelData.description
+                                                          "\n" + modelData.description +
+                                                          (popup.selectedMemberIndex >= 0 ? "\n\nClick to add to " + popup.currentTeam[popup.selectedMemberIndex].name : "")
+                                            onClicked: popup.addMoveToActiveMember(modelData)
+                                        }
+                                    }
+                                }
+                            }
+
+                            // --- SLEEK AUTO-SAVING TEAM BUILDER ---
+                            Kirigami.Separator {
+                                Layout.fillWidth: true
+                                color: popup.isDarkMode ? "#333333" : "#777777"
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Kirigami.Heading {
+                                    text: "Teams"
+                                    level: 2
+                                    Layout.fillWidth: true
+                                    color: popup.isDarkMode ? "#ffffff" : "#171717"
+                                }
+
+                                Rectangle {
+                                    visible: popup.currentTeam.length < 6 && popup.pokemonName.length > 0
+                                    radius: 4
+                                    height: 22
+                                    width: addBtnLbl.implicitWidth + 12
+                                    color: "#e53935"
+
+                                    Label {
+                                        id: addBtnLbl
+                                        anchors.centerIn: parent
+                                        text: "+ Add " + popup.pokemonName
+                                        color: "#ffffff"
+                                        font.bold: true
+                                        font.pixelSize: 10
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: popup.addPokemonToTeam()
+                                    }
+                                }
+                            }
+
+                            // 3 Team Slot Pills (Auto-loads & Auto-saves)
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 4
+                                Repeater {
+                                    model: [1, 2, 3]
+                                    delegate: Rectangle {
+                                        required property int modelData
+                                        readonly property bool isCurrentSlot: popup.activeTeamSlot === modelData
+                                        Layout.fillWidth: true
+                                        height: 24
+                                        radius: 4
+                                        color: isCurrentSlot ? "#e53935" : (popup.isDarkMode ? "#2d2d2d" : "#eeeeee")
+                                        border.color: isCurrentSlot ? "#b71c1c" : (popup.isDarkMode ? "#444444" : "#cccccc")
+                                        border.width: 1
+
+                                        Label {
+                                            anchors.centerIn: parent
+                                            text: "Team " + modelData
+                                            color: parent.isCurrentSlot ? "#ffffff" : (popup.isDarkMode ? "#ffffff" : "#171717")
+                                            font.bold: parent.isCurrentSlot
+                                            font.pixelSize: Kirigami.Theme.smallFont.pixelSize
+                                        }
+
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: popup.loadTeamSlot(modelData)
+                                        }
+                                    }
+                                }
+                            }
+
+                            // 6-Slot Visual Party Grid (3x2)
+                            GridLayout {
+                                Layout.fillWidth: true
+                                columns: 3
+                                rowSpacing: 6
+                                columnSpacing: 6
+
+                                Repeater {
+                                    model: 6
+                                    delegate: Rectangle {
+                                        required property int index
+                                        readonly property bool hasMember: index < popup.currentTeam.length
+                                        readonly property var member: hasMember ? popup.currentTeam[index] : null
+                                        readonly property bool isSelected: index === popup.selectedMemberIndex
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: 62
+                                        radius: 6
+                                        color: hasMember
+                                            ? (popup.isDarkMode ? "#242424" : "#f7f7f7")
+                                            : (popup.isDarkMode ? "#1c1c1c" : "#fafafa")
+                                        border.color: isSelected
+                                            ? "#e53935"
+                                            : (popup.isDarkMode ? "#3a3a3a" : "#dddddd")
+                                        border.width: isSelected ? 2 : 1
+
+                                        // Empty Slot View
+                                        Label {
+                                            visible: !parent.hasMember
+                                            anchors.centerIn: parent
+                                            text: "+"
+                                            font.pixelSize: 20
+                                            font.bold: true
+                                            color: popup.isDarkMode ? "#555555" : "#bbbbbb"
+                                        }
+
+                                        // Occupied Slot View
+                                        Column {
+                                            visible: parent.hasMember
+                                            anchors.centerIn: parent
+                                            spacing: 1
+
+                                            Image {
+                                                anchors.horizontalCenter: parent.horizontalCenter
+                                                width: 36
+                                                height: 36
+                                                source: parent.member ? parent.member.sprite : ""
+                                                fillMode: Image.PreserveAspectFit
+                                                asynchronous: true
+                                                cache: true
+                                            }
+
+                                            Label {
+                                                width: 52
+                                                text: parent.member ? parent.member.name : ""
+                                                horizontalAlignment: Text.AlignHCenter
+                                                font.pixelSize: 9
+                                                font.bold: parent.isSelected
+                                                elide: Text.ElideRight
+                                                color: popup.isDarkMode ? "#ffffff" : "#171717"
+                                            }
+                                        }
+
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            cursorShape: Qt.PointingHandCursor
+                                            hoverEnabled: true
+                                            ToolTip.visible: containsMouse
+                                            ToolTip.delay: 200
+                                            ToolTip.text: parent.hasMember
+                                                ? (parent.member.name + " (" + (parent.member.moves ? parent.member.moves.length : 0) + "/4 moves)\nClick to edit moves · Double-click to load")
+                                                : ("Add " + popup.pokemonName + " to slot " + (index + 1))
+                                            onClicked: {
+                                                if (parent.hasMember) {
+                                                    popup.selectedMemberIndex = index
+                                                } else {
+                                                    popup.addPokemonToTeam()
+                                                }
+                                            }
+                                            onDoubleClicked: {
+                                                if (parent.hasMember) {
+                                                    searchField.text = parent.member.name
+                                                    popup.searchEdited = false
+                                                    popup.loadPokemon(parent.member.name)
+                                                }
+                                            }
+                                        }
+
+                                        // Quick Remove "✕" Badge
+                                        Rectangle {
+                                            visible: parent.hasMember
+                                            anchors.top: parent.top
+                                            anchors.right: parent.right
+                                            anchors.margins: 3
+                                            width: 14
+                                            height: 14
+                                            radius: 7
+                                            color: popup.isDarkMode ? "#3a3a3a" : "#e0e0e0"
+
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: "✕"
+                                                font.pixelSize: 8
+                                                font.bold: true
+                                                color: popup.isDarkMode ? "#ffffff" : "#171717"
+                                            }
+
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: popup.removePokemonFromTeam(index)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Active Team Member's 4 Move Slots
+                            Rectangle {
+                                visible: popup.selectedMemberIndex >= 0 && popup.selectedMemberIndex < popup.currentTeam.length
+                                Layout.fillWidth: true
+                                implicitHeight: memberMovesCol.implicitHeight + 12
+                                radius: 6
+                                color: popup.isDarkMode ? "#222222" : "#f5f5f5"
+                                border.color: popup.isDarkMode ? "#383838" : "#dddddd"
+                                border.width: 1
+
+                                ColumnLayout {
+                                    id: memberMovesCol
+                                    anchors.fill: parent
+                                    anchors.margins: 6
+                                    spacing: 4
+
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        Label {
+                                            Layout.fillWidth: true
+                                            text: (popup.selectedMemberIndex >= 0 && popup.selectedMemberIndex < popup.currentTeam.length)
+                                                ? (popup.currentTeam[popup.selectedMemberIndex].name + "'s Moves (" + popup.currentTeam[popup.selectedMemberIndex].moves.length + "/4)")
+                                                : ""
+                                            font.bold: true
+                                            font.pixelSize: Kirigami.Theme.smallFont.pixelSize
+                                            color: popup.isDarkMode ? "#ffffff" : "#171717"
+                                            elide: Text.ElideRight
+                                        }
+                                    }
+
+                                    Label {
+                                        visible: popup.selectedMemberIndex >= 0
+                                            && popup.selectedMemberIndex < popup.currentTeam.length
+                                            && popup.currentTeam[popup.selectedMemberIndex].moves.length === 0
+                                        text: "Click any move pill above to assign it."
+                                        font.pixelSize: 10
+                                        color: popup.isDarkMode ? "#aaaaaa" : "#666666"
+                                    }
+
+                                    Flow {
+                                        Layout.fillWidth: true
+                                        spacing: 4
+
+                                        Repeater {
+                                            model: (popup.selectedMemberIndex >= 0 && popup.selectedMemberIndex < popup.currentTeam.length)
+                                                ? popup.currentTeam[popup.selectedMemberIndex].moves
+                                                : []
+                                            delegate: Rectangle {
+                                                required property var modelData
+                                                required property int index
+                                                radius: 4
+                                                height: assignedMoveLbl.implicitHeight + 8
+                                                width: assignedMoveLbl.implicitWidth + 12
+                                                color: modelData.bgColor || "#a8a878"
+                                                border.color: "#222222"
+                                                border.width: 1
+
+                                                Label {
+                                                    id: assignedMoveLbl
+                                                    anchors.centerIn: parent
+                                                    text: modelData.name + " · " + modelData.power + "/" + modelData.accuracy + " ✕"
+                                                    color: "#171717"
+                                                    font.pixelSize: 10
+                                                    font.bold: true
+                                                }
+
+                                                MouseArea {
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    ToolTip.visible: containsMouse
+                                                    ToolTip.delay: 200
+                                                    ToolTip.text: (modelData.classLabel || "Move") + " · " + (modelData.method || "") +
+                                                                  "\nPower: " + modelData.power + " | Accuracy: " + modelData.accuracy +
+                                                                  "\n" + (modelData.description || "") +
+                                                                  "\n\nClick to remove"
+                                                    onClicked: popup.removeMoveFromActiveMember(index)
+                                                }
+                                            }
                                         }
                                     }
                                 }
