@@ -39,6 +39,7 @@ PlasmoidItem {
         property string pokemonId: ""
         property string spriteUrl: ""
         property string shinyUrl: ""
+        property string animatedUrl: ""
         property string heightText: ""
         property string weightText: ""
         property string flavorText: ""
@@ -282,6 +283,7 @@ PlasmoidItem {
             totalEvYield = 0
             spriteUrl = ""
             shinyUrl = ""
+            animatedUrl = ""
             flavorText = ""
             
             categorizedMoves = {}
@@ -424,11 +426,15 @@ PlasmoidItem {
                         let g = "Gen " + i
                         if (tempCategorized[g].length > 0) {
                             tempCategorized[g].sort(function(a, b) {
-                                if (a.method === "Level Up" && b.method === "Level Up") {
+                                let aIsLevel = (a.method === "Level Up")
+                                let bIsLevel = (b.method === "Level Up")
+
+                                if (aIsLevel && bIsLevel) {
                                     return a.level - b.level
                                 }
-                                if (a.method === "Level Up") return -1
-                                if (b.method === "Level Up") return 1
+                                if (aIsLevel) return -1
+                                if (bIsLevel) return 1
+                                
                                 return a.name.localeCompare(b.name)
                             })
                             gens.push(g)
@@ -445,6 +451,8 @@ PlasmoidItem {
                 const fileName = speciesName
                 spriteUrl = "https://img.pokemondb.net/sprites/home/normal/" + fileName + ".png"
                 shinyUrl = "https://img.pokemondb.net/sprites/home/shiny/" + fileName + ".png"
+                animatedUrl = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/showdown/" + pokemon.id + ".gif"
+                
                 requestJson(pokemon.species.url, requestId, function (species) {
                     const entries = species.flavor_text_entries || []
                     let flavor = ""
@@ -786,13 +794,13 @@ PlasmoidItem {
 
                                 Column {
                                     spacing: 0
-                                    Image {
-                                        width: 48
-                                        height: 48
-                                        source: popup.spriteUrl
+                                    AnimatedImage {
+                                        width: 56
+                                        height: 56
+                                        source: popup.animatedUrl
                                         fillMode: Image.PreserveAspectFit
                                         asynchronous: true
-                                        cache: true
+                                        playing: true
                                     }
                                 }
                                 Column {
