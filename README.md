@@ -1,3 +1,5 @@
+This was vibe coded for personal use, though I figured if anyone else would like to have a handy dandy Pokedex at their pointer tip I'd share it. So YES! AI was used.
+
 # PlasmaDex
 
 A searchable Pokédex drawer for KDE Plasma 6.0 and newer. Add the applet to a
@@ -25,22 +27,6 @@ value.
 
 ## Install
 NOTE: The org.example.pokedex.tar.gz file is the structured applet! extract it within your .local/share/plasma/plasmoids folder to install it!
-
-Install the package with Plasma's package tool, then use **Add or Manage
-Widgets** on a panel and add **PlasmaDex** from the widget chooser. Use the
-panel button to open and close the drawer; do not add it to the desktop. If
-an earlier broken copy is already on the panel, remove that instance and add
-the applet again after installing.
-
-```sh
-kpackagetool6 --type Plasma/Applet --install .
-```
-
-For later updates to an installed package, use:
-
-```sh
-kpackagetool6 --type Plasma/Applet --upgrade .
-```
-
+The other files listed in the repository are every file within the "org.example.pokedex.tar.gz" so you can see and view it.
 The applet uses the Plasma 6 applet API and Qt 6. Reload Plasma Shell after
 editing QML if it is already running.
