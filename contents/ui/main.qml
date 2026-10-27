@@ -329,57 +329,99 @@ PlasmoidItem {
                     "Gen 7": [], "Gen 8": [], "Gen 9": []
                 }
 
+                let pendingMovesCount = 0
+
                 for (let m = 0; m < pokemon.moves.length; ++m) {
                     let entry = pokemon.moves[m]
-                    let moveName = titleCase(entry.move.name)
-                    
+                    let moveName = titleCase(entry.move.name.replace(/-/g, " "))
+                    let moveUrl = entry.move.url
+
                     for (let d = 0; d < entry.version_group_details.length; ++d) {
                         let detail = entry.version_group_details[d]
-                        let versionName = detail.version_group.name
-                        let genName = versionToGenMap[versionName]
+                        let genName = versionToGenMap[detail.version_group.name]
 
                         if (genName) {
-                            let exists = false
-                            for (let k = 0; k < tempCategorized[genName].length; ++k) {
-                                if (tempCategorized[genName][k].name === moveName) {
-                                    exists = true
-                                    break
-                                }
-                            }
-                            
-                            if (!exists) {
-                                let methodRaw = detail.move_learn_method.name
-                                let method = titleCase(methodRaw)
-                                let bgColor = methodRaw === "level-up" ? "#d4edda" : (methodRaw === "machine" ? "#fff3cd" : "#d1ecf1")
-                                let borderColor = methodRaw === "level-up" ? "#c3e6cb" : (methodRaw === "machine" ? "#ffeeba" : "#bee5eb")
-                                
-                                tempCategorized[genName].push({
-                                    name: moveName,
-                                    method: method,
-                                    level: detail.level_learned_at,
-                                    bgColor: bgColor,
-                                    borderColor: borderColor
-                                })
+                            let methodRaw = detail.move_learn_method.name
+                            let level = detail.level_learned_at || 0
+
+                            let existsObj = tempCategorized[genName].find(function(item) { return item.name === moveName })
+                            if (!existsObj) {
+                                pendingMovesCount++
+                                (function(targetGen, mvName, learnMethod, lvl, url) {
+                                    const mxhr = new XMLHttpRequest()
+                                    mxhr.open("GET", url)
+                                    mxhr.setRequestHeader("Accept", "application/json")
+                                    mxhr.onreadystatechange = function () {
+                                        if (mxhr.readyState !== XMLHttpRequest.DONE) return
+                                        let classColor = "#a8a878" // Default Status fallback
+                                        let classType = "Status"
+                                        if (mxhr.status >= 200 && mxhr.status < 300) {
+                                            try {
+                                                let moveDetails = JSON.parse(mxhr.responseText)
+                                                if (moveDetails.damage_class) {
+                                                    let className = moveDetails.damage_class.name
+                                                    if (className === "physical") {
+                                                        classColor = "#ff7f52"
+                                                        classType = "Physical"
+                                                    } else if (className === "special") {
+                                                        classColor = "#705898"
+                                                        classType = "Special"
+                                                    }
+                                                }
+                                            } catch (e) {}
+                                        }
+
+                                        let formattedDisplay = mvName
+                                        if (learnMethod === "level-up" && lvl > 0) {
+                                            formattedDisplay = mvName + " · Lv. " + lvl
+                                        }
+
+                                        targetGen.push({
+                                            name: mvName,
+                                            displayText: formattedDisplay,
+                                            method: titleCase(learnMethod.replace(/-/g, " ")),
+                                            level: lvl,
+                                            bgColor: classColor,
+                                            classLabel: classType
+                                        })
+
+                                        pendingMovesCount--
+                                        if (pendingMovesCount === 0) {
+                                            finalizeMovesSorting()
+                                        }
+                                    }
+                                    mxhr.send()
+                                })(tempCategorized[genName], moveName, methodRaw, level, moveUrl)
                             }
                         }
                     }
                 }
 
-                let gens = []
-                for (let i = 1; i <= 9; ++i) {
-                    let g = "Gen " + i
-                    if (tempCategorized[g].length > 0) {
-                        tempCategorized[g].sort(function(a, b) {
-                            return a.name.localeCompare(b.name)
-                        })
-                        gens.push(g)
-                    }
+                if (pendingMovesCount === 0) {
+                    finalizeMovesSorting()
                 }
-                
-                categorizedMoves = tempCategorized
-                availableGenerations = gens
-                if (gens.length > 0) {
-                    selectGeneration(gens[gens.length - 1])
+
+                function finalizeMovesSorting() {
+                    let gens = []
+                    for (let i = 1; i <= 9; ++i) {
+                        let g = "Gen " + i
+                        if (tempCategorized[g].length > 0) {
+                            tempCategorized[g].sort(function(a, b) {
+                                if (a.method === "Level Up" && b.method === "Level Up") {
+                                    return a.level - b.level
+                                }
+                                if (a.method === "Level Up") return -1
+                                if (b.method === "Level Up") return 1
+                                return a.name.localeCompare(b.name)
+                            })
+                            gens.push(g)
+                        }
+                    }
+                    categorizedMoves = tempCategorized
+                    availableGenerations = gens
+                    if (gens.length > 0) {
+                        selectGeneration(gens[gens.length - 1])
+                    }
                 }
 
                 const speciesName = pokemon.species.name
@@ -1107,13 +1149,13 @@ PlasmoidItem {
                                         height: moveLabel.implicitHeight + 8
                                         width: moveLabel.implicitWidth + 12
                                         color: modelData.bgColor
-                                        border.color: modelData.borderColor
+                                        border.color: "#222222"
                                         border.width: 1
 
                                         Label {
                                             id: moveLabel
                                             anchors.centerIn: parent
-                                            text: modelData.name
+                                            text: modelData.displayText
                                             color: "#171717"
                                             font.pixelSize: Kirigami.Theme.smallFont.pixelSize
                                         }
@@ -1123,7 +1165,7 @@ PlasmoidItem {
                                             hoverEnabled: true
                                             ToolTip.visible: containsMouse
                                             ToolTip.delay: 200
-                                            ToolTip.text: (modelData.method === "Level Up" ? "Level " + modelData.level : modelData.method)
+                                            ToolTip.text: modelData.classLabel + " · " + modelData.method
                                         }
                                     }
                                 }
