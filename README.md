@@ -24,6 +24,7 @@ from 0 to 31 per stat; the bars show that range rather than a fixed species
 value.
 
 ## Install
+NOTE: The org.example.pokedex.tar.gz file is the structured applet! extract it within your .local/share/plasma/plasmoids folder to install it!
 
 Install the package with Plasma's package tool, then use **Add or Manage
 Widgets** on a panel and add **PlasmaDex** from the widget chooser. Use the
