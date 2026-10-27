@@ -30,7 +30,8 @@ PlasmoidItem {
         implicitWidth: 210
         implicitHeight: 570
         
-        property bool isDarkMode: false
+        // Automatically inherit system dark mode preference, user can still override
+        property bool isDarkMode: Kirigami.Theme.colorSet === Kirigami.Theme.View ? (Kirigami.Theme.backgroundColor.r * 0.299 + Kirigami.Theme.backgroundColor.g * 0.587 + Kirigami.Theme.backgroundColor.b * 0.114 < 0.5) : false
 
         color: isDarkMode ? "#181818" : Kirigami.Theme.backgroundColor
         radius: Kirigami.Units.largeSpacing
@@ -1072,7 +1073,7 @@ PlasmoidItem {
                             }
 
                             Kirigami.Heading {
-                                text: "Evolution (Click to load)"
+                                text: "Evolution"
                                 level: 2
                                 color: popup.isDarkMode ? "#ffffff" : "#171717"
                             }
@@ -1125,31 +1126,36 @@ PlasmoidItem {
                                                 }
                                             }
 
-                                            Column {
+                                            Item {
                                                 width: 56
-                                                spacing: 0
-                                                Image {
-                                                    id: evoImg
-                                                    anchors.horizontalCenter: parent.horizontalCenter
-                                                    width: 44
-                                                    height: 44
-                                                    source: modelData.spriteUrl
-                                                    fillMode: Image.PreserveAspectFit
-                                                    asynchronous: true
-                                                    cache: true
-                                                    onStatusChanged: {
-                                                        if (status === Image.Error)
-                                                            source = modelData.fallbackSpriteUrl
+                                                height: 60
+                                                Column {
+                                                    id: evoCol
+                                                    width: 56
+                                                    spacing: 0
+                                                    Image {
+                                                        id: evoImg
+                                                        anchors.horizontalCenter: parent.horizontalCenter
+                                                        width: 44
+                                                        height: 44
+                                                        source: modelData.spriteUrl
+                                                        fillMode: Image.PreserveAspectFit
+                                                        asynchronous: true
+                                                        cache: true
+                                                        onStatusChanged: {
+                                                            if (status === Image.Error)
+                                                                source = modelData.fallbackSpriteUrl
+                                                        }
                                                     }
-                                                }
-                                                Label {
-                                                    width: parent.width
-                                                    text: popup.titleCase(modelData.name)
-                                                    horizontalAlignment: Text.AlignHCenter
-                                                    font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                                    font.bold: modelData.name === popup.pokemonName.toLowerCase()
-                                                    elide: Text.ElideRight
-                                                    color: popup.isDarkMode ? "#ffffff" : "#171717"
+                                                    Label {
+                                                        width: parent.width
+                                                        text: popup.titleCase(modelData.name)
+                                                        horizontalAlignment: Text.AlignHCenter
+                                                        font.pixelSize: Kirigami.Theme.smallFont.pixelSize
+                                                        font.bold: modelData.name === popup.pokemonName.toLowerCase()
+                                                        elide: Text.ElideRight
+                                                        color: popup.isDarkMode ? "#ffffff" : "#171717"
+                                                    }
                                                 }
 
                                                 MouseArea {
