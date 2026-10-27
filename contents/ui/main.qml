@@ -75,10 +75,17 @@ PlasmoidItem {
         property int selectedMemberIndex: -1
         property var teamWeaknesses: []
 
+        // Item Database & Search State
+        property var itemNames: []
+        property var itemSuggestions: []
+        property string activeItemSprite: ""
+        property string activeItemDesc: ""
+
         Component.onCompleted: {
             initTeamDatabase()
             loadPokemon("charmander")
             loadSpeciesNames()
+            loadItemNames()
         }
 
         function getDatabase() {
@@ -97,20 +104,89 @@ PlasmoidItem {
             }
         }
 
+        function loadItemNames() {
+            const xhr = new XMLHttpRequest()
+            xhr.open("GET", "https://pokeapi.co/api/v2/item?limit=2000")
+            xhr.setRequestHeader("Accept", "application/json")
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState !== XMLHttpRequest.DONE) return
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    try {
+                        const response = JSON.parse(xhr.responseText)
+                        itemNames = response.results.map(function (entry) {
+                            return entry.name
+                        })
+                    } catch (e) {}
+                }
+            }
+            xhr.send()
+        }
+
+        function fetchItemDetails(itemName) {
+            if (!itemName) {
+                activeItemSprite = ""
+                activeItemDesc = ""
+                return
+            }
+            const query = itemName.toLowerCase().replace(/\s+/g, "-")
+            const xhr = new XMLHttpRequest()
+            xhr.open("GET", "https://pokeapi.co/api/v2/item/" + query)
+            xhr.setRequestHeader("Accept", "application/json")
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState !== XMLHttpRequest.DONE) return
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    try {
+                        const data = JSON.parse(xhr.responseText)
+                        if (data.sprites && data.sprites.default) {
+                            activeItemSprite = data.sprites.default
+                        } else {
+                            activeItemSprite = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/" + query + ".png"
+                        }
+                        let desc = "No description available."
+                        if (data.flavor_text_entries) {
+                            for (let i = 0; i < data.flavor_text_entries.length; ++i) {
+                                if (data.flavor_text_entries[i].language.name === "en") {
+                                    desc = data.flavor_text_entries[i].text.replace(/[\n\f\r]/g, " ")
+                                    break
+                                }
+                            }
+                        }
+                        activeItemDesc = desc
+                    } catch (e) {
+                        activeItemSprite = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/" + query + ".png"
+                        activeItemDesc = "Held item."
+                    }
+                } else {
+                    activeItemSprite = ""
+                    activeItemDesc = "Custom item."
+                }
+            }
+            xhr.send()
+        }
+
+        function updateItemSuggestions(input) {
+            const query = input.trim().toLowerCase().replace(/\s+/g, "-")
+            if (query.length < 2) {
+                itemSuggestions = []
+                return
+            }
+            itemSuggestions = itemNames.filter(function (name) {
+                return name.indexOf(query) === 0
+            }).slice(0, 5)
+        }
+
         function calculateTeamWeaknesses() {
             if (!currentTeam || currentTeam.length === 0) {
                 teamWeaknesses = []
                 return
             }
 
-            // Simple robust offline defense tally based on member types
             let typeWeaknessMap = {
                 "Normal": [], "Fire": [], "Water": [], "Electric": [], "Grass": [], "Ice": [],
                 "Fighting": [], "Poison": [], "Ground": [], "Flying": [], "Psychic": [], "Bug": [],
                 "Rock": [], "Ghost": [], "Dragon": [], "Dark": [], "Steel": [], "Fairy": []
             }
 
-            // Basic chart multipliers for common types
             const weakChart = {
                 "Normal": ["Fighting"],
                 "Fire": ["Water", "Ground", "Rock"],
@@ -172,12 +248,19 @@ PlasmoidItem {
             if (!pokemonName)
                 return
             if (selectedMemberIndex >= 0 && selectedMemberIndex < currentTeam.length) {
-                if (currentTeam[selectedMemberIndex].name.toLowerCase() === pokemonName.toLowerCase())
+                if (currentTeam[selectedMemberIndex].name.toLowerCase() === pokemonName.toLowerCase()) {
+                    if (currentTeam[selectedMemberIndex].item) {
+                        fetchItemDetails(currentTeam[selectedMemberIndex].item)
+                    }
                     return
+                }
             }
             for (let i = 0; i < currentTeam.length; ++i) {
                 if (currentTeam[i].name.toLowerCase() === pokemonName.toLowerCase()) {
                     selectedMemberIndex = i
+                    if (currentTeam[i].item) {
+                        fetchItemDetails(currentTeam[i].item)
+                    }
                     return
                 }
             }
@@ -251,6 +334,7 @@ PlasmoidItem {
             let nextTeam = JSON.parse(JSON.stringify(currentTeam))
             nextTeam[selectedMemberIndex].item = itemName
             currentTeam = nextTeam
+            fetchItemDetails(itemName)
             saveCurrentTeam()
         }
 
@@ -1438,6 +1522,19 @@ PlasmoidItem {
                                 border.color: isSelected ? "#e53935" : (popup.isDarkMode ? "#3a3a3a" : "#dddddd")
                                 border.width: isSelected ? 2 : 1
 
+                                MouseArea {
+                                    anchors.fill: parent
+                                    acceptedButtons: Qt.LeftButton
+                                    onClicked: {
+                                        if (slotCard.hasMember) {
+                                            popup.selectedMemberIndex = slotCard.index
+                                            popup.loadPokemon(slotCard.member.name, slotCard.index)
+                                        } else {
+                                            popup.addPokemonToTeam()
+                                        }
+                                    }
+                                }
+
                                 Label {
                                     visible: !slotCard.hasMember
                                     anchors.centerIn: parent
@@ -1479,21 +1576,10 @@ PlasmoidItem {
 
                                     Button {
                                         text: "✕"
-                                        implicitWidth: 18
-                                        implicitHeight: 18
-                                        onClicked: popup.removePokemonFromTeam(slotCard.index)
-                                    }
-                                }
-
-                                MouseArea {
-                                    anchors.fill: parent
-                                    acceptedButtons: Qt.LeftButton
-                                    onClicked: {
-                                        if (slotCard.hasMember) {
-                                            popup.selectedMemberIndex = slotCard.index
-                                            popup.loadPokemon(slotCard.member.name, slotCard.index)
-                                        } else {
-                                            popup.addPokemonToTeam()
+                                        implicitWidth: 20
+                                        implicitHeight: 20
+                                        onClicked: {
+                                            popup.removePokemonFromTeam(slotCard.index)
                                         }
                                     }
                                 }
@@ -1524,7 +1610,8 @@ PlasmoidItem {
                                 }
                                 Item { Layout.fillWidth: true }
                                 TextField {
-                                    Layout.preferredWidth: 90
+                                    id: itemInput
+                                    Layout.preferredWidth: 100
                                     Layout.preferredHeight: 22
                                     placeholderText: "Held item..."
                                     font.pixelSize: 9
@@ -1532,7 +1619,36 @@ PlasmoidItem {
                                     onTextChanged: {
                                         if (popup.selectedMemberIndex >= 0 && popup.selectedMemberIndex < popup.currentTeam.length) {
                                             popup.updateActiveMemberItem(text)
+                                            popup.updateItemSuggestions(text)
                                         }
+                                    }
+                                }
+                            }
+
+                            // Item Autocomplete Suggestions
+                            ListView {
+                                id: itemSuggList
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: popup.itemSuggestions.length > 0 ? Math.min(popup.itemSuggestions.length, 3) * 20 : 0
+                                visible: popup.itemSuggestions.length > 0 && itemInput.activeFocus
+                                clip: true
+                                model: popup.itemSuggestions
+                                delegate: ItemDelegate {
+                                    required property string modelData
+                                    width: itemSuggList.width
+                                    height: 20
+                                    background: Rectangle {
+                                        color: popup.isDarkMode ? "#2a2a2a" : "#ffffff"
+                                    }
+                                    contentItem: Label {
+                                        text: popup.titleCase(modelData)
+                                        font.pixelSize: 9
+                                        color: popup.isDarkMode ? "#ffffff" : "#171717"
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+                                    onClicked: {
+                                        itemInput.text = popup.titleCase(modelData)
+                                        popup.itemSuggestions = []
                                     }
                                 }
                             }
@@ -1561,7 +1677,14 @@ PlasmoidItem {
 
                                         MouseArea {
                                             anchors.fill: parent
+                                            hoverEnabled: true
                                             cursorShape: Qt.PointingHandCursor
+                                            ToolTip.visible: containsMouse
+                                            ToolTip.delay: 200
+                                            ToolTip.text: (modelData.classLabel || "Move") + " · " + (modelData.method || "") +
+                                                          "\nPower: " + modelData.power + " | Accuracy: " + modelData.accuracy +
+                                                          "\n" + (modelData.description || "") +
+                                                          "\n\nClick to remove"
                                             onClicked: popup.removeMoveFromActiveMember(index)
                                         }
                                     }
