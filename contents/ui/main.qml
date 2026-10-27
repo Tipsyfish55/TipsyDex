@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.LocalStorage
 import org.kde.plasma.plasmoid
 import org.kde.kirigami as Kirigami
 
@@ -30,7 +31,6 @@ PlasmoidItem {
         implicitWidth: 210
         implicitHeight: 570
         
-        // Robust system dark mode check based on window palette and Kirigami theme background luminance
         property bool isDarkMode: {
             const bg = Kirigami.Theme.backgroundColor
             const luminance = (bg.r * 0.299 + bg.g * 0.587 + bg.b * 0.114)
@@ -69,9 +69,138 @@ PlasmoidItem {
         property var availableGenerations: []
         property var learnableMoves: []
 
+        // Team Builder State (6 Party Slots, 4 Moves, 3 Saved Presets)
+        property var activeTeam: []
+        property var selectedPokemonMoves: []
+        property var savedTeamPresets: []
+        property int activePresetIndex: 1
+
         Component.onCompleted: {
             loadPokemon("charmander")
             loadSpeciesNames()
+            initDatabase()
+        }
+
+        function getDatabase() {
+            return LocalStorage.openDatabaseSync("PlasmaDexTeamDB", "1.0", "Pokemon Teams and Rosters", 1000000)
+        }
+
+        function initDatabase() {
+            try {
+                const db = getDatabase()
+                db.transaction(function(tx) {
+                    tx.executeSql('CREATE TABLE IF NOT EXISTS presets (slot_id INTEGER PRIMARY KEY, team_data TEXT);')
+                })
+                loadPresets()
+            } catch (err) {
+                console.log("DB Init Error: " + err)
+            }
+        }
+
+        function loadPresets() {
+            try {
+                const db = getDatabase()
+                db.transaction(function(tx) {
+                    const rs = tx.executeSql('SELECT * FROM presets;')
+                    let presets = [ {slot: 1, members: []}, {slot: 2, members: []}, {slot: 3, members: []} ]
+                    for (let i = 0; i < rs.rows.length; i++) {
+                        let slotId = rs.rows.item(i).slot_id
+                        let data = JSON.parse(rs.rows.item(i).team_data || "[]")
+                        for (let p = 0; p < presets.length; ++p) {
+                            if (presets[p].slot === slotId) {
+                                presets[p].members = data
+                            }
+                        }
+                    }
+                    savedTeamPresets = presets
+                })
+            } catch (err) {
+                console.log("Load Presets Error: " + err)
+            }
+        }
+
+        function savePresetToDb(slotId, members) {
+            try {
+                const db = getDatabase()
+                db.transaction(function(tx) {
+                    tx.executeSql('INSERT OR REPLACE INTO presets (slot_id, team_data) VALUES (?, ?);',
+                        [slotId, JSON.stringify(members)])
+                })
+                loadPresets()
+                statusText = "Saved to Team Slot " + slotId + "!"
+            } catch (err) {
+                errorText = "Could not save team preset."
+            }
+        }
+
+        function loadPreset(slotId) {
+            for (let i = 0; i < savedTeamPresets.length; ++i) {
+                if (savedTeamPresets[i].slot === slotId) {
+                    activeTeam = JSON.parse(JSON.stringify(savedTeamPresets[i].members))
+                    activePresetIndex = slotId
+                    statusText = "Loaded Team Slot " + slotId
+                    return
+                }
+            }
+        }
+
+        function addCurrentPokemonToTeam() {
+            if (!pokemonName) return
+            if (activeTeam.length >= 6) {
+                errorText = "Party is full (Max 6 Pokémon)."
+                return
+            }
+            activeTeam.push({
+                name: pokemonName,
+                sprite: animatedUrl || spriteUrl,
+                moves: JSON.parse(JSON.stringify(selectedPokemonMoves))
+            })
+            activeTeam = activeTeam.slice()
+            errorText = ""
+            statusText = "Added " + pokemonName + " to party!"
+        }
+
+        function removePokemonFromTeam(index) {
+            activeTeam.splice(index, 1)
+            activeTeam = activeTeam.slice()
+            statusText = "Removed Pokémon from party."
+        }
+
+        function addMoveToSelected(moveName) {
+            if (selectedPokemonMoves.length >= 4) return
+            for (let i = 0; i < selectedPokemonMoves.length; ++i) {
+                if (selectedPokemonMoves[i].name === moveName) return
+            }
+
+            const queryName = moveName.toLowerCase().replace(/\s+/g, "-")
+            const mxhr = new XMLHttpRequest()
+            mxhr.open("GET", "https://pokeapi.co/api/v2/move/" + queryName)
+            mxhr.setRequestHeader("Accept", "application/json")
+            mxhr.onreadystatechange = function () {
+                if (mxhr.readyState !== XMLHttpRequest.DONE) return
+                let pwr = "-"
+                let acc = "-"
+                if (mxhr.status >= 200 && mxhr.status < 300) {
+                    try {
+                        let data = JSON.parse(mxhr.responseText)
+                        if (data.power !== null && data.power !== undefined) pwr = data.power
+                        if (data.accuracy !== null && data.accuracy !== undefined) acc = data.accuracy + "%"
+                    } catch (e) {}
+                }
+
+                selectedPokemonMoves.push({
+                    name: moveName,
+                    power: pwr,
+                    accuracy: acc
+                })
+                selectedPokemonMoves = selectedPokemonMoves.slice()
+            }
+            mxhr.send()
+        }
+
+        function removeMoveFromSelected(index) {
+            selectedPokemonMoves.splice(index, 1)
+            selectedPokemonMoves = selectedPokemonMoves.slice()
         }
 
         function selectGeneration(genName) {
@@ -295,6 +424,7 @@ PlasmoidItem {
             animatedUrl = ""
             animatedShinyUrl = ""
             flavorText = ""
+            selectedPokemonMoves = []
             
             categorizedMoves = {}
             selectedGeneration = ""
@@ -1132,7 +1262,7 @@ PlasmoidItem {
 
                                             Item {
                                                 width: 56
-                                                height: evoCol.height > 0 ? evoCol.height : 60
+                                                height: 60
                                                 Column {
                                                     id: evoCol
                                                     width: 56
@@ -1248,14 +1378,165 @@ PlasmoidItem {
                                         MouseArea {
                                             anchors.fill: parent
                                             hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
                                             ToolTip.visible: containsMouse
                                             ToolTip.delay: 200
-                                            ToolTip.text: modelData.classLabel + " · " + modelData.method
+                                            ToolTip.text: "Click to add " + modelData.name + " to team"
+                                            onClicked: popup.addMoveToSelected(modelData.name)
                                         }
                                     }
                                 }
                             }
 
+                            // --- TEAM BUILDER WIDGET SECTION (Below Moves) ---
+                            Kirigami.Separator {
+                                Layout.fillWidth: true
+                                color: popup.isDarkMode ? "#333333" : "#777777"
+                            }
+
+                            Kirigami.Heading {
+                                text: "Team Builder (Max 6)"
+                                level: 2
+                                color: popup.isDarkMode ? "#ffffff" : "#171717"
+                            }
+
+                            // Saved Team Slots (1, 2, 3)
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 4
+                                Repeater {
+                                    model: [1, 2, 3]
+                                    delegate: Button {
+                                        required property int modelData
+                                        text: "Slot " + modelData + (popup.activePresetIndex === modelData ? " ★" : "")
+                                        Layout.fillWidth: true
+                                        onClicked: popup.loadPreset(modelData)
+                                    }
+                                }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Button {
+                                    text: "+ Add " + popup.pokemonName + " (" + popup.selectedPokemonMoves.length + "/4 moves)"
+                                    Layout.fillWidth: true
+                                    enabled: popup.activeTeam.length < 6 && popup.pokemonName !== ""
+                                    onClicked: popup.addCurrentPokemonToTeam()
+                                }
+                                Button {
+                                    text: "Save Slot " + popup.activePresetIndex
+                                    implicitWidth: 90
+                                    onClicked: popup.savePresetToDb(popup.activePresetIndex, popup.activeTeam)
+                                }
+                            }
+
+                            // Active Party List (6 slots)
+                            ListView {
+                                id: activeTeamList
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: popup.activeTeam.length > 0 ? (popup.activeTeam.length * 54) : 40
+                                clip: true
+                                interactive: false
+                                model: popup.activeTeam
+                                delegate: Rectangle {
+                                    required property var modelData
+                                    required property int index
+                                    width: activeTeamList.width
+                                    height: 50
+                                    color: popup.isDarkMode ? "#252525" : "#f5f5f5"
+                                    border.color: popup.isDarkMode ? "#3a3a3a" : "#dddddd"
+                                    border.width: 1
+                                    radius: 6
+
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.margins: 4
+                                        spacing: 6
+
+                                        Image {
+                                            Layout.preferredWidth: 38
+                                            Layout.preferredHeight: 38
+                                            source: modelData.sprite
+                                            fillMode: Image.PreserveAspectFit
+                                            asynchronous: true
+                                            cache: true
+                                        }
+
+                                        ColumnLayout {
+                                            Layout.fillWidth: true
+                                            spacing: 2
+                                            Label {
+                                                text: modelData.name
+                                                font.bold: true
+                                                font.pixelSize: Kirigami.Theme.smallFont.pixelSize
+                                                color: popup.isDarkMode ? "#ffffff" : "#171717"
+                                            }
+                                            Flow {
+                                                Layout.fillWidth: true
+                                                spacing: 4
+                                                Repeater {
+                                                    model: modelData.moves
+                                                    delegate: Label {
+                                                        required property var modelData
+                                                        text: modelData.name + " (" + modelData.power + "/" + modelData.accuracy + ")"
+                                                        font.pixelSize: 10
+                                                        color: popup.isDarkMode ? "#aaaaaa" : "#666666"
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        Button {
+                                            text: "✕"
+                                            implicitWidth: 26
+                                            implicitHeight: 26
+                                            onClicked: popup.removePokemonFromTeam(index)
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Currently Selected Pokemon's Chosen Moves Preview
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                visible: popup.selectedPokemonMoves.length > 0
+                                spacing: 4
+
+                                Label {
+                                    text: "Moves staged for " + popup.pokemonName + ":"
+                                    font.bold: true
+                                    font.pixelSize: Kirigami.Theme.smallFont.pixelSize
+                                    color: popup.isDarkMode ? "#ffffff" : "#171717"
+                                }
+
+                                Flow {
+                                    Layout.fillWidth: true
+                                    spacing: 4
+                                    Repeater {
+                                        model: popup.selectedPokemonMoves
+                                        delegate: Rectangle {
+                                            required property var modelData
+                                            required property int index
+                                            radius: 4
+                                            height: 24
+                                            width: stagedLabel.implicitWidth + 24
+                                            color: "#e53935"
+
+                                            Label {
+                                                id: stagedLabel
+                                                anchors.centerIn: parent
+                                                text: modelData.name + " [" + modelData.power + "/" + modelData.accuracy + "] ✕"
+                                                color: "#ffffff"
+                                                font.pixelSize: 10
+                                            }
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                onClicked: popup.removeMoveFromSelected(index)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
