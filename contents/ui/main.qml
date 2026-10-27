@@ -309,9 +309,19 @@ PlasmoidItem {
                     return titleCase(entry.type.name)
                 })
                 loadTypeDefenses(pokemon.types, requestId)
+                
+                const statAbbrMap = {
+                    "hp": "HP",
+                    "attack": "Atk",
+                    "defense": "Def",
+                    "special-attack": "Sp.Atk",
+                    "special-defense": "Sp.Def",
+                    "speed": "Speed"
+                }
+
                 stats = pokemon.stats.map(function (entry) {
                     return {
-                        name: titleCase(entry.stat.name.replace("special-", "sp. ")),
+                        name: statAbbrMap[entry.stat.name] || titleCase(entry.stat.name),
                         base: entry.base_stat,
                         ev: entry.effort
                     }
@@ -970,7 +980,7 @@ PlasmoidItem {
                                 spacing: Kirigami.Units.smallSpacing
                                 Label {
                                     text: ""
-                                    Layout.preferredWidth: 36
+                                    Layout.preferredWidth: 48
                                 }
                                 Label {
                                     text: "BASE"
@@ -1001,7 +1011,7 @@ PlasmoidItem {
 
                                     Label {
                                         text: modelData.name
-                                        Layout.preferredWidth: 36
+                                        Layout.preferredWidth: 48
                                         font.pixelSize: Kirigami.Theme.smallFont.pixelSize
                                         color: popup.isDarkMode ? "#ffffff" : "#171717"
                                     }
