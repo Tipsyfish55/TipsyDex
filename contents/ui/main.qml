@@ -429,7 +429,7 @@ PlasmoidItem {
                                 let aIsLevel = (a.method === "Level Up")
                                 let bIsLevel = (b.method === "Level Up")
 
-                                // 1. Both are Level Up moves: sort strictly lowest to highest level number
+                                // 1. Both are level-up moves: sort numerically from lowest level to highest level
                                 if (aIsLevel && bIsLevel) {
                                     return a.level - b.level
                                 }
@@ -437,13 +437,7 @@ PlasmoidItem {
                                 if (aIsLevel) return -1
                                 if (bIsLevel) return 1
 
-                                // 3. Sort Machine (TM) moves next
-                                let aIsMachine = (a.method === "Machine")
-                                let bIsMachine = (b.method === "Machine")
-                                if (aIsMachine && !bIsMachine) return -1
-                                if (!aIsMachine && bIsMachine) return 1
-
-                                // 4. Alphabetical fallback for everything else
+                                // 3. Alphabetical fallback for everything else
                                 return a.name.localeCompare(b.name)
                             })
                             gens.push(g)
