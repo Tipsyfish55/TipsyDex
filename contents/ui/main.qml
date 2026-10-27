@@ -429,11 +429,11 @@ PlasmoidItem {
                                 let aIsLevel = (a.method === "Level Up")
                                 let bIsLevel = (b.method === "Level Up")
 
-                                // 1. If both are Level Up moves, sort strictly lowest level to highest level
+                                // 1. Both are Level Up moves: sort strictly lowest to highest level number
                                 if (aIsLevel && bIsLevel) {
                                     return a.level - b.level
                                 }
-                                // 2. Force Level Up moves to the absolute top of the list (-1)
+                                // 2. Force Level Up moves to the absolute top of the list
                                 if (aIsLevel) return -1
                                 if (bIsLevel) return 1
 
