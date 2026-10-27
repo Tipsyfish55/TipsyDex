@@ -355,7 +355,7 @@ PlasmoidItem {
                             if (seenPerGen[genName][moveName]) {
                                 if (methodRaw === "level-up" && level > 0) {
                                     let existingObj = tempCategorized[genName].find(function(item) { return item.name === moveName })
-                                    if (existingObj && existingObj.method !== "Level Up") {
+                                    if (existingObj && existingObj.level === 0) {
                                         existingObj.method = "Level Up"
                                         existingObj.level = level
                                         existingObj.displayText = moveName + " · Lv. " + level
@@ -426,20 +426,25 @@ PlasmoidItem {
                         let g = "Gen " + i
                         if (tempCategorized[g].length > 0) {
                             tempCategorized[g].sort(function(a, b) {
-                                let aIsLevel = (a.method === "Level Up")
-                                let bIsLevel = (b.method === "Level Up")
+                                let aHasLevel = (a.level > 0 || a.method.toLowerCase().includes("level"));
+                                let bHasLevel = (b.level > 0 || b.method.toLowerCase().includes("level"));
 
-                                // 1. Both are level-up moves: sort numerically from lowest level to highest level
-                                if (aIsLevel && bIsLevel) {
-                                    return a.level - b.level
+                                // 1. Both have levels: sort numerically lowest to highest level
+                                if (aHasLevel && bHasLevel) {
+                                    return a.level - b.level;
                                 }
-                                // 2. Force Level Up moves to the absolute top of the list
-                                if (aIsLevel) return -1
-                                if (bIsLevel) return 1
+                                // 2. 'a' has a level, 'b' does not -> 'a' goes to the top
+                                if (aHasLevel) {
+                                    return -1;
+                                }
+                                // 3. 'b' has a level, 'a' does not -> 'b' goes to the top
+                                if (bHasLevel) {
+                                    return 1;
+                                }
 
-                                // 3. Alphabetical fallback for everything else
-                                return a.name.localeCompare(b.name)
-                            })
+                                // 4. Alphabetical fallback for everything else
+                                return a.name.localeCompare(b.name);
+                            });
                             gens.push(g)
                         }
                     }
