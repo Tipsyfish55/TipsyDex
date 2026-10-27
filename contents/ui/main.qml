@@ -1196,7 +1196,11 @@ PlasmoidItem {
                                                     ToolTip.visible: containsMouse
                                                     ToolTip.delay: 200
                                                     ToolTip.text: "Load " + popup.titleCase(modelData.name)
-                                                    onClicked: popup.loadPokemon(modelData.name)
+                                                    onClicked: {
+                                                        searchField.text = popup.titleCase(modelData.name)
+                                                        searchEdited = false
+                                                        popup.loadPokemon(modelData.name)
+                                                    }
                                                 }
                                             }
                                         }
