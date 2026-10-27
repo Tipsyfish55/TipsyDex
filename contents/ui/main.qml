@@ -778,55 +778,6 @@ PlasmoidItem {
             return output
         }
 
-        function requirementText(requirement) {
-            const parts = []
-            if (requirement.level)
-                parts.push("Lv. " + requirement.level)
-            if (requirement.item)
-                parts.push(titleCase(requirement.item))
-            if (requirement.heldItem)
-                parts.push("Hold " + titleCase(requirement.heldItem))
-            if (requirement.happiness)
-                parts.push("Friendship " + requirement.happiness)
-            if (requirement.affection)
-                parts.push("Affection " + requirement.affection)
-            if (requirement.beauty)
-                parts.push("Beauty " + requirement.beauty)
-            if (requirement.gender)
-                parts.push(requirement.gender === 1 ? "Female" : "Male")
-            if (requirement.timeOfDay)
-                parts.push(titleCase(requirement.timeOfDay))
-            if (requirement.location)
-                parts.push(titleCase(requirement.location))
-            if (requirement.knownMove)
-                parts.push(titleCase(requirement.knownMove))
-            if (requirement.knownMoveType)
-                parts.push(titleCase(requirement.knownMoveType) + " move")
-            if (requirement.partySpecies)
-                parts.push("Party: " + titleCase(requirement.partySpecies))
-            if (requirement.partyType)
-                parts.push(titleCase(requirement.partyType) + " in party")
-            if (requirement.tradeSpecies)
-                parts.push("Trade for " + titleCase(requirement.tradeSpecies))
-            if (requirement.relativeStats !== null) {
-                const statRelation = ["Attack < Defense", "Attack = Defense", "Attack > Defense"]
-                parts.push(statRelation[requirement.relativeStats + 1])
-            }
-            if (requirement.rain)
-                parts.push("Rain")
-            if (requirement.multiplayer)
-                parts.push("Multiplayer")
-            if (requirement.upsideDown)
-                parts.push("Turn upside down")
-            if (requirement.trigger === "trade" && !requirement.item && !requirement.heldItem)
-                parts.push("Trade")
-            else if (requirement.trigger === "use-item" && !requirement.item)
-                parts.push("Use an item")
-            else if (requirement.trigger === "level-up" && !requirement.level)
-                parts.push("Level up")
-            return parts.join(" · ")
-        }
-
         function shortRequirement(requirements) {
             if (!requirements || requirements.length === 0)
                 return "Trade"
@@ -841,7 +792,7 @@ PlasmoidItem {
                 return "Friendship"
             if (first.trigger === "trade")
                 return "Trade"
-            return requirementText(first)
+            return titleCase(first.trigger)
         }
 
         ColumnLayout {
@@ -1036,886 +987,654 @@ PlasmoidItem {
                 }
             }
 
-            Rectangle {
+            ScrollView {
+                id: bodyScroll
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                color: popup.isDarkMode ? "#181818" : "#ffffff"
+                clip: true
+                visible: popup.pokemonName.length > 0
+                ScrollBar.horizontal: ScrollBar { policy: ScrollBar.AlwaysOff }
+                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AlwaysOn }
+                background: Rectangle {
+                    color: popup.isDarkMode ? "#181818" : "#ffffff"
+                }
 
                 ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: Kirigami.Units.smallSpacing
+                    width: bodyScroll.availableWidth
+                    spacing: Kirigami.Units.smallSpacing
 
-                    ScrollView {
-                        id: bodyScroll
+                    RowLayout {
                         Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        clip: true
-                        visible: popup.pokemonName.length > 0
-                        ScrollBar.horizontal: ScrollBar {
-                            policy: ScrollBar.AlwaysOff
-                        }
-                        ScrollBar.vertical: ScrollBar {
-                            parent: bodyScroll
-                            anchors.top: parent.top
-                            anchors.bottom: parent.bottom
-                            anchors.right: parent.right
-                            policy: ScrollBar.AlwaysOn
-                            interactive: true
-                        }
-                        background: Rectangle {
-                            color: popup.isDarkMode ? "#181818" : "#ffffff"
-                        }
+                        spacing: Kirigami.Units.smallSpacing
 
                         ColumnLayout {
-                            width: bodyScroll.availableWidth
+                            Layout.fillWidth: true
                             spacing: Kirigami.Units.smallSpacing
 
-                            RowLayout {
+                            Kirigami.Heading {
+                                text: popup.pokemonName
+                                level: 2
                                 Layout.fillWidth: true
-                                spacing: Kirigami.Units.smallSpacing
-
-                                ColumnLayout {
-                                    Layout.fillWidth: true
-                                    spacing: Kirigami.Units.smallSpacing
-
-                                    Kirigami.Heading {
-                                        text: popup.pokemonName
-                                        level: 2
-                                        Layout.fillWidth: true
-                                        Layout.minimumWidth: 0
-                                        elide: Text.ElideRight
-                                        color: popup.isDarkMode ? "#ffffff" : "#171717"
-                                    }
-                                    Label {
-                                        text: popup.pokemonId
-                                        color: popup.isDarkMode ? "#aaaaaa" : "#555555"
-                                    }
-                                    Flow {
-                                        Layout.fillWidth: true
-                                        spacing: Kirigami.Units.smallSpacing
-                                        Repeater {
-                                            model: popup.types
-                                            delegate: Rectangle {
-                                                required property string modelData
-                                                radius: height / 2
-                                                height: typeLabel.implicitHeight + 8
-                                                width: typeLabel.implicitWidth + 18
-                                                color: popup.typeColor(modelData.toLowerCase())
-                                                border.color: "#222222"
-                                                border.width: 1
-
-                                                Label {
-                                                    id: typeLabel
-                                                    anchors.centerIn: parent
-                                                    text: modelData
-                                                    font.bold: true
-                                                    font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                                    color: popup.typeTextColor(modelData.toLowerCase())
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                Column {
-                                    spacing: 0
-                                    AnimatedImage {
-                                        width: 56
-                                        height: 56
-                                        source: popup.animatedUrl
-                                        fillMode: Image.PreserveAspectFit
-                                        asynchronous: true
-                                        playing: true
-                                    }
-                                }
-                                Column {
-                                    spacing: 0
-                                    AnimatedImage {
-                                        width: 48
-                                        height: 48
-                                        source: popup.animatedShinyUrl
-                                        fillMode: Image.PreserveAspectFit
-                                        asynchronous: true
-                                        playing: true
-                                    }
-                                }
-                            }
-
-                            ColumnLayout {
-                                visible: popup.typeDefenses.length > 0
-                                Layout.fillWidth: true
-                                spacing: Kirigami.Units.smallSpacing
-
-                                Kirigami.Heading {
-                                    text: "Type defenses"
-                                    level: 3
-                                    color: popup.isDarkMode ? "#ffffff" : "#171717"
-                                }
-
-                                Flow {
-                                    Layout.fillWidth: true
-                                    spacing: Kirigami.Units.smallSpacing
-                                    Repeater {
-                                        model: popup.typeDefenses
-                                        delegate: Rectangle {
-                                            required property var modelData
-                                            readonly property string multiplierText: modelData.multiplier === 0
-                                                ? "0×" : modelData.multiplier + "×"
-                                            radius: 5
-                                            height: defenseLabel.implicitHeight + 6
-                                            width: defenseLabel.implicitWidth + 12
-                                            color: modelData.color
-                                            border.color: "#222222"
-                                            border.width: 1
-
-                                            Label {
-                                                id: defenseLabel
-                                                anchors.centerIn: parent
-                                                text: parent.multiplierText + " " + modelData.name
-                                                color: modelData.textColor
-                                                font.bold: true
-                                                font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                            }
-                                        }
-                                    }
-                                }
-                                Label {
-                                    text: "Damage taken; neutral types omitted."
-                                    color: popup.isDarkMode ? "#aaaaaa" : "#555555"
-                                    font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                }
-                            }
-
-                            Label {
-                                visible: popup.flavorText.length > 0
-                                text: popup.flavorText
-                                Layout.fillWidth: true
-                                wrapMode: Text.Wrap
-                                maximumLineCount: 2
+                                Layout.minimumWidth: 0
                                 elide: Text.ElideRight
                                 color: popup.isDarkMode ? "#ffffff" : "#171717"
                             }
-
-                            RowLayout {
-                                Layout.fillWidth: true
-                                Label {
-                                    text: popup.heightText
-                                    Layout.fillWidth: true
-                                    color: popup.isDarkMode ? "#ffffff" : "#171717"
-                                }
-                                Label {
-                                    text: popup.weightText
-                                    color: popup.isDarkMode ? "#aaaaaa" : "#555555"
-                                }
-                            }
-
-                            Kirigami.Separator {
-                                Layout.fillWidth: true
-                            }
-
-                            RowLayout {
-                                Layout.fillWidth: true
-                                Kirigami.Heading {
-                                    text: "Stats"
-                                    level: 2
-                                    Layout.fillWidth: true
-                                    color: popup.isDarkMode ? "#ffffff" : "#171717"
-                                }
-                                Label {
-                                    text: "EV yield " + popup.totalEvYield
-                                    color: popup.isDarkMode ? "#aaaaaa" : "#555555"
-                                }
-                            }
-
-                            RowLayout {
-                                Layout.fillWidth: true
-                                spacing: Kirigami.Units.smallSpacing
-                                Label {
-                                    text: ""
-                                    Layout.preferredWidth: 48
-                                }
-                                Label {
-                                    text: "BASE"
-                                    Layout.fillWidth: true
-                                    font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                    color: popup.isDarkMode ? "#aaaaaa" : "#555555"
-                                }
-                                Label {
-                                    text: "EV"
-                                    Layout.preferredWidth: 32
-                                    font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                    color: popup.isDarkMode ? "#aaaaaa" : "#555555"
-                                }
-                                Label {
-                                    text: "IV"
-                                    Layout.preferredWidth: 38
-                                    font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                    color: popup.isDarkMode ? "#aaaaaa" : "#555555"
-                                }
-                            }
-
-                            Repeater {
-                                model: popup.stats
-                                delegate: RowLayout {
-                                    required property var modelData
-                                    Layout.fillWidth: true
-                                    spacing: Kirigami.Units.smallSpacing
-
-                                    Label {
-                                        text: modelData.name
-                                        Layout.preferredWidth: 48
-                                        font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                        color: popup.isDarkMode ? "#ffffff" : "#171717"
-                                    }
-                                    Item {
-                                        Layout.fillWidth: true
-                                        implicitHeight: 20
-                                        Rectangle {
-                                            anchors.fill: parent
-                                            radius: height / 2
-                                            color: popup.isDarkMode ? "#2d2d2d" : "#e5e5e5"
-                                        }
-                                        Rectangle {
-                                            width: parent.width * modelData.base / 255
-                                            height: parent.height
-                                            radius: height / 2
-                                            color: popup.isDarkMode ? "#5c93e8" : "#78a9e6"
-                                            opacity: 0.8
-                                        }
-                                        Label {
-                                            anchors.fill: parent
-                                            text: modelData.base
-                                            horizontalAlignment: Text.AlignHCenter
-                                            verticalAlignment: Text.AlignVCenter
-                                            font.bold: true
-                                            font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                            color: popup.isDarkMode ? "#ffffff" : "#171717"
-                                        }
-                                    }
-                                    Item {
-                                        Layout.preferredWidth: 32
-                                        implicitHeight: 20
-                                        Rectangle {
-                                            anchors.fill: parent
-                                            radius: height / 2
-                                            color: popup.isDarkMode ? "#2d2d2d" : "#e5e5e5"
-                                        }
-                                        Rectangle {
-                                            width: modelData.ev ? Math.max(parent.width * modelData.ev / 3, 14) : 0
-                                            height: parent.height
-                                            radius: height / 2
-                                            color: popup.isDarkMode ? "#7cc965" : "#a6ce83"
-                                            opacity: 0.8
-                                        }
-                                        Label {
-                                            anchors.fill: parent
-                                            text: "+" + modelData.ev
-                                            horizontalAlignment: Text.AlignHCenter
-                                            verticalAlignment: Text.AlignVCenter
-                                            font.bold: true
-                                            font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                            color: popup.isDarkMode ? "#ffffff" : "#171717"
-                                        }
-                                    }
-                                    Item {
-                                        Layout.preferredWidth: 38
-                                        implicitHeight: 20
-                                        Rectangle {
-                                            anchors.fill: parent
-                                            radius: height / 2
-                                            color: popup.isDarkMode ? "#2d2d2d" : "#e5e5e5"
-                                        }
-                                        Rectangle {
-                                            anchors.fill: parent
-                                            radius: height / 2
-                                            color: popup.isDarkMode ? "#a07cc5" : "#c5a5d8"
-                                        }
-                                        Label {
-                                            anchors.fill: parent
-                                            text: "0–31"
-                                            horizontalAlignment: Text.AlignHCenter
-                                            verticalAlignment: Text.AlignVCenter
-                                            font.bold: true
-                                            font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                            color: popup.isDarkMode ? "#ffffff" : "#171717"
-                                        }
-                                    }
-                                }
-                            }
-
                             Label {
-                                text: "EV is gained by defeating this Pokémon. IVs are individual values: each stat can range from 0 to 31."
-                                Layout.fillWidth: true
-                                wrapMode: Text.Wrap
+                                text: popup.pokemonId
                                 color: popup.isDarkMode ? "#aaaaaa" : "#555555"
-                                font.pixelSize: Kirigami.Theme.smallFont.pixelSize
                             }
-
-                            Kirigami.Separator {
-                                Layout.fillWidth: true
-                                color: popup.isDarkMode ? "#333333" : "#777777"
-                            }
-
-                            Kirigami.Heading {
-                                text: "Evolution"
-                                level: 2
-                                color: popup.isDarkMode ? "#ffffff" : "#171717"
-                            }
-
-                            Repeater {
-                                model: popup.evolutionPaths(popup.evolutionRoot, [], [])
-                                delegate: Flow {
-                                    required property var modelData
-                                    Layout.fillWidth: true
-                                    spacing: Kirigami.Units.smallSpacing
-                                    Repeater {
-                                        model: parent.modelData
-                                        delegate: Row {
-                                            required property int index
-                                            required property var modelData
-                                            spacing: 2
-
-                                            Row {
-                                                visible: index > 0
-                                                spacing: 2
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                Label {
-                                                    text: "-"
-                                                    color: popup.isDarkMode ? "#aaaaaa" : "#555555"
-                                                    anchors.verticalCenter: parent.verticalCenter
-                                                }
-                                                Image {
-                                                    visible: modelData.requirements.length > 0
-                                                        && (modelData.requirements[0].item.length > 0
-                                                            || modelData.requirements[0].heldItem.length > 0)
-                                                    source: (visible
-                                                        ? "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/"
-                                                            + (modelData.requirements[0].item || modelData.requirements[0].heldItem) + ".png"
-                                                        : "")
-                                                    sourceSize.width: 18
-                                                    sourceSize.height: 18
-                                                    width: visible ? 18 : 0
-                                                    height: visible ? 18 : 0
-                                                    fillMode: Image.PreserveAspectFit
-                                                    asynchronous: true
-                                                    cache: true
-                                                }
-                                                Label {
-                                                    text: popup.shortRequirement(modelData.requirements)
-                                                    width: Math.min(implicitWidth, 46)
-                                                    elide: Text.ElideRight
-                                                    color: popup.isDarkMode ? "#aaaaaa" : "#555555"
-                                                    font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                                    anchors.verticalCenter: parent.verticalCenter
-                                                }
-                                            }
-
-                                            Item {
-                                                width: 56
-                                                height: 60
-                                                Column {
-                                                    id: evoCol
-                                                    width: 56
-                                                    spacing: 0
-                                                    Image {
-                                                        id: evoImg
-                                                        anchors.horizontalCenter: parent.horizontalCenter
-                                                        width: 44
-                                                        height: 44
-                                                        source: modelData.spriteUrl
-                                                        fillMode: Image.PreserveAspectFit
-                                                        asynchronous: true
-                                                        cache: true
-                                                        onStatusChanged: {
-                                                            if (status === Image.Error)
-                                                                source = modelData.fallbackSpriteUrl
-                                                        }
-                                                    }
-                                                    Label {
-                                                        width: parent.width
-                                                        text: popup.titleCase(modelData.name)
-                                                        horizontalAlignment: Text.AlignHCenter
-                                                        font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                                        font.bold: modelData.name === popup.pokemonName.toLowerCase()
-                                                        elide: Text.ElideRight
-                                                        color: popup.isDarkMode ? "#ffffff" : "#171717"
-                                                    }
-                                                }
-
-                                                MouseArea {
-                                                    anchors.fill: parent
-                                                    cursorShape: Qt.PointingHandCursor
-                                                    ToolTip.visible: containsMouse
-                                                    ToolTip.delay: 200
-                                                    ToolTip.text: "Load " + popup.titleCase(modelData.name)
-                                                    onClicked: {
-                                                        searchField.text = popup.titleCase(modelData.name)
-                                                        searchEdited = false
-                                                        popup.loadPokemon(modelData.name)
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            Kirigami.Separator {
-                                Layout.fillWidth: true
-                                color: popup.isDarkMode ? "#333333" : "#777777"
-                            }
-                            
-                            RowLayout {
-                                Layout.fillWidth: true
-                                Kirigami.Heading {
-                                    text: "Moves"
-                                    level: 2
-                                    Layout.fillWidth: true
-                                    color: popup.isDarkMode ? "#ffffff" : "#171717"
-                                }
-                                Label {
-                                    visible: popup.selectedMemberIndex >= 0
-                                        && popup.selectedMemberIndex < popup.currentTeam.length
-                                        && popup.currentTeam[popup.selectedMemberIndex].name.toLowerCase() === popup.pokemonName.toLowerCase()
-                                    text: "Click move → " + popup.pokemonName + " (Slot " + (popup.selectedMemberIndex + 1) + ")"
-                                    font.pixelSize: 10
-                                    color: "#e53935"
-                                    font.bold: true
-                                }
-                            }
-
                             Flow {
                                 Layout.fillWidth: true
-                                spacing: 4
-                                visible: popup.availableGenerations.length > 0
-
+                                spacing: Kirigami.Units.smallSpacing
                                 Repeater {
-                                    model: popup.availableGenerations
+                                    model: popup.types
                                     delegate: Rectangle {
                                         required property string modelData
-                                        readonly property bool isSelected: modelData === popup.selectedGeneration
-                                        radius: 4
-                                        height: genPillLabel.implicitHeight + 6
-                                        width: genPillLabel.implicitWidth + 10
-                                        color: isSelected ? "#e53935" : (popup.isDarkMode ? "#2d2d2d" : "#eeeeee")
-                                        border.color: isSelected ? "#b71c1c" : (popup.isDarkMode ? "#444444" : "#cccccc")
+                                        radius: height / 2
+                                        height: typeLabel.implicitHeight + 8
+                                        width: typeLabel.implicitWidth + 18
+                                        color: popup.typeColor(modelData.toLowerCase())
+                                        border.color: "#222222"
                                         border.width: 1
 
                                         Label {
-                                            id: genPillLabel
+                                            id: typeLabel
                                             anchors.centerIn: parent
                                             text: modelData
-                                            color: parent.isSelected ? "#ffffff" : (popup.isDarkMode ? "#ffffff" : "#171717")
-                                            font.bold: parent.isSelected
+                                            font.bold: true
                                             font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                        }
-
-                                        MouseArea {
-                                            anchors.fill: parent
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: popup.selectGeneration(modelData)
+                                            color: popup.typeTextColor(modelData.toLowerCase())
                                         }
                                     }
                                 }
                             }
+                        }
 
-                            Flow {
-                                Layout.fillWidth: true
-                                spacing: Kirigami.Units.smallSpacing
-                                
-                                Repeater {
-                                    model: popup.learnableMoves
-                                    delegate: Rectangle {
-                                        required property var modelData
-                                        radius: 4
-                                        height: moveLabel.implicitHeight + 8
-                                        width: moveLabel.implicitWidth + 12
-                                        color: modelData.bgColor
-                                        border.color: popup.isDarkMode ? "#444444" : "#222222"
-                                        border.width: 1
+                        AnimatedImage {
+                            width: 56
+                            height: 56
+                            source: popup.animatedUrl
+                            fillMode: Image.PreserveAspectFit
+                            asynchronous: true
+                            playing: true
+                        }
+                        AnimatedImage {
+                            width: 48
+                            height: 48
+                            source: popup.animatedShinyUrl
+                            fillMode: Image.PreserveAspectFit
+                            asynchronous: true
+                            playing: true
+                        }
+                    }
 
-                                        Label {
-                                            id: moveLabel
-                                            anchors.centerIn: parent
-                                            text: modelData.displayText
-                                            color: "#171717"
-                                            font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                        }
+                    ColumnLayout {
+                        visible: popup.typeDefenses.length > 0
+                        Layout.fillWidth: true
+                        spacing: Kirigami.Units.smallSpacing
 
-                                        MouseArea {
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
-                                            ToolTip.visible: containsMouse
-                                            ToolTip.delay: 200
-                                            ToolTip.text: modelData.classLabel + " · " + modelData.method + 
-                                                          "\nPower: " + modelData.power + " | Accuracy: " + modelData.accuracy + 
-                                                          "\n" + modelData.description +
-                                                          ((popup.selectedMemberIndex >= 0
-                                                            && popup.selectedMemberIndex < popup.currentTeam.length
-                                                            && popup.currentTeam[popup.selectedMemberIndex].name.toLowerCase() === popup.pokemonName.toLowerCase())
-                                                            ? "\n\nClick to add to " + popup.currentTeam[popup.selectedMemberIndex].name + " (Slot " + (popup.selectedMemberIndex + 1) + ")"
-                                                            : "\n\n(Select this Pokémon in your team below to assign moves)")
-                                            onClicked: popup.addMoveToActiveMember(modelData)
-                                        }
-                                    }
-                                }
-                            }
+                        Kirigami.Heading {
+                            text: "Type defenses"
+                            level: 3
+                            color: popup.isDarkMode ? "#ffffff" : "#171717"
+                        }
 
-                            // --- SLEEK AUTO-SAVING TEAM BUILDER ---
-                            Kirigami.Separator {
-                                Layout.fillWidth: true
-                                color: popup.isDarkMode ? "#333333" : "#777777"
-                            }
-
-                            RowLayout {
-                                Layout.fillWidth: true
-                                Kirigami.Heading {
-                                    text: "Teams"
-                                    level: 2
-                                    Layout.fillWidth: true
-                                    color: popup.isDarkMode ? "#ffffff" : "#171717"
-                                }
-
-                                Rectangle {
-                                    visible: popup.currentTeam.length < 6 && popup.pokemonName.length > 0
-                                    radius: 4
-                                    height: 22
-                                    width: addBtnLbl.implicitWidth + 12
-                                    color: "#e53935"
+                        Flow {
+                            Layout.fillWidth: true
+                            spacing: Kirigami.Units.smallSpacing
+                            Repeater {
+                                model: popup.typeDefenses
+                                delegate: Rectangle {
+                                    required property var modelData
+                                    readonly property string multiplierText: modelData.multiplier === 0
+                                        ? "0×" : modelData.multiplier + "×"
+                                    radius: 5
+                                    height: defenseLabel.implicitHeight + 6
+                                    width: defenseLabel.implicitWidth + 12
+                                    color: modelData.color
+                                    border.color: "#222222"
+                                    border.width: 1
 
                                     Label {
-                                        id: addBtnLbl
+                                        id: defenseLabel
                                         anchors.centerIn: parent
-                                        text: "+ Add " + popup.pokemonName
-                                        color: "#ffffff"
+                                        text: parent.multiplierText + " " + modelData.name
+                                        color: modelData.textColor
                                         font.bold: true
-                                        font.pixelSize: 10
-                                    }
-
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: popup.addPokemonToTeam()
+                                        font.pixelSize: Kirigami.Theme.smallFont.pixelSize
                                     }
                                 }
                             }
+                        }
+                    }
 
-                            // 3 Team Slot Pills (Auto-loads & Auto-saves)
-                            RowLayout {
+                    Label {
+                        visible: popup.flavorText.length > 0
+                        text: popup.flavorText
+                        Layout.fillWidth: true
+                        wrapMode: Text.Wrap
+                        maximumLineCount: 2
+                        elide: Text.ElideRight
+                        color: popup.isDarkMode ? "#ffffff" : "#171717"
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Label {
+                            text: popup.heightText
+                            Layout.fillWidth: true
+                            color: popup.isDarkMode ? "#ffffff" : "#171717"
+                        }
+                        Label {
+                            text: popup.weightText
+                            color: popup.isDarkMode ? "#aaaaaa" : "#555555"
+                        }
+                    }
+
+                    Kirigami.Separator { Layout.fillWidth: true }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Kirigami.Heading {
+                            text: "Stats"
+                            level: 2
+                            Layout.fillWidth: true
+                            color: popup.isDarkMode ? "#ffffff" : "#171717"
+                        }
+                        Label {
+                            text: "EV yield " + popup.totalEvYield
+                            color: popup.isDarkMode ? "#aaaaaa" : "#555555"
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Kirigami.Units.smallSpacing
+                        Label { text: ""; Layout.preferredWidth: 48 }
+                        Label { text: "BASE"; Layout.fillWidth: true; font.pixelSize: Kirigami.Theme.smallFont.pixelSize; color: popup.isDarkMode ? "#aaaaaa" : "#555555" }
+                        Label { text: "EV"; Layout.preferredWidth: 32; font.pixelSize: Kirigami.Theme.smallFont.pixelSize; color: popup.isDarkMode ? "#aaaaaa" : "#555555" }
+                        Label { text: "IV"; Layout.preferredWidth: 38; font.pixelSize: Kirigami.Theme.smallFont.pixelSize; color: popup.isDarkMode ? "#aaaaaa" : "#555555" }
+                    }
+
+                    Repeater {
+                        model: popup.stats
+                        delegate: RowLayout {
+                            required property var modelData
+                            Layout.fillWidth: true
+                            spacing: Kirigami.Units.smallSpacing
+
+                            Label {
+                                text: modelData.name
+                                Layout.preferredWidth: 48
+                                font.pixelSize: Kirigami.Theme.smallFont.pixelSize
+                                color: popup.isDarkMode ? "#ffffff" : "#171717"
+                            }
+                            Item {
                                 Layout.fillWidth: true
-                                spacing: 4
-                                Repeater {
-                                    model: [1, 2, 3]
-                                    delegate: Rectangle {
-                                        required property int modelData
-                                        readonly property bool isCurrentSlot: popup.activeTeamSlot === modelData
-                                        Layout.fillWidth: true
-                                        height: 24
-                                        radius: 4
-                                        color: isCurrentSlot ? "#e53935" : (popup.isDarkMode ? "#2d2d2d" : "#eeeeee")
-                                        border.color: isCurrentSlot ? "#b71c1c" : (popup.isDarkMode ? "#444444" : "#cccccc")
-                                        border.width: 1
-
-                                        Label {
-                                            anchors.centerIn: parent
-                                            text: "Team " + modelData
-                                            color: parent.isCurrentSlot ? "#ffffff" : (popup.isDarkMode ? "#ffffff" : "#171717")
-                                            font.bold: parent.isCurrentSlot
-                                            font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                        }
-
-                                        MouseArea {
-                                            anchors.fill: parent
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: popup.loadTeamSlot(modelData)
-                                        }
-                                    }
+                                implicitHeight: 20
+                                Rectangle {
+                                    anchors.fill: parent
+                                    radius: height / 2
+                                    color: popup.isDarkMode ? "#2d2d2d" : "#e5e5e5"
+                                }
+                                Rectangle {
+                                    width: parent.width * modelData.base / 255
+                                    height: parent.height
+                                    radius: height / 2
+                                    color: popup.isDarkMode ? "#5c93e8" : "#78a9e6"
+                                    opacity: 0.8
+                                }
+                                Label {
+                                    anchors.fill: parent
+                                    text: modelData.base
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                    font.bold: true
+                                    font.pixelSize: Kirigami.Theme.smallFont.pixelSize
+                                    color: popup.isDarkMode ? "#ffffff" : "#171717"
                                 }
                             }
+                            Item {
+                                Layout.preferredWidth: 32
+                                implicitHeight: 20
+                                Rectangle {
+                                    anchors.fill: parent
+                                    radius: height / 2
+                                    color: popup.isDarkMode ? "#2d2d2d" : "#e5e5e5"
+                                }
+                                Rectangle {
+                                    width: modelData.ev ? Math.max(parent.width * modelData.ev / 3, 14) : 0
+                                    height: parent.height
+                                    radius: height / 2
+                                    color: popup.isDarkMode ? "#7cc965" : "#a6ce83"
+                                    opacity: 0.8
+                                }
+                                Label {
+                                    anchors.fill: parent
+                                    text: "+" + modelData.ev
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                    font.bold: true
+                                    font.pixelSize: Kirigami.Theme.smallFont.pixelSize
+                                    color: popup.isDarkMode ? "#ffffff" : "#171717"
+                                }
+                            }
+                            Item {
+                                Layout.preferredWidth: 38
+                                implicitHeight: 20
+                                Rectangle {
+                                    anchors.fill: parent
+                                    radius: height / 2
+                                    color: popup.isDarkMode ? "#2d2d2d" : "#e5e5e5"
+                                }
+                                Rectangle {
+                                    anchors.fill: parent
+                                    radius: height / 2
+                                    color: popup.isDarkMode ? "#a07cc5" : "#c5a5d8"
+                                }
+                                Label {
+                                    anchors.fill: parent
+                                    text: "0–31"
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                    font.bold: true
+                                    font.pixelSize: Kirigami.Theme.smallFont.pixelSize
+                                    color: popup.isDarkMode ? "#ffffff" : "#171717"
+                                }
+                            }
+                        }
+                    }
 
-                            // 6-Slot Visual Party Grid (3x2)
-                            GridLayout {
-                                Layout.fillWidth: true
-                                columns: 3
-                                rowSpacing: 6
-                                columnSpacing: 6
+                    Kirigami.Separator { Layout.fillWidth: true }
 
-                                Repeater {
-                                    model: 6
-                                    delegate: Rectangle {
-                                        id: slotCard
-                                        required property int index
-                                        readonly property bool hasMember: index < popup.currentTeam.length
-                                        readonly property var member: hasMember ? popup.currentTeam[index] : null
-                                        readonly property bool isSelected: index === popup.selectedMemberIndex
-                                        Layout.fillWidth: true
-                                        Layout.preferredHeight: 64
-                                        radius: 6
-                                        color: hasMember
-                                            ? (popup.isDarkMode ? "#242424" : "#f7f7f7")
-                                            : (popup.isDarkMode ? "#1c1c1c" : "#fafafa")
-                                        border.color: isSelected
-                                            ? "#e53935"
-                                            : (popup.isDarkMode ? "#3a3a3a" : "#dddddd")
-                                        border.width: isSelected ? 2 : 1
+                    Kirigami.Heading {
+                        text: "Evolution"
+                        level: 2
+                        color: popup.isDarkMode ? "#ffffff" : "#171717"
+                    }
 
-                                        // Empty Slot View
+                    Repeater {
+                        model: popup.evolutionPaths(popup.evolutionRoot, [], [])
+                        delegate: Flow {
+                            required property var modelData
+                            Layout.fillWidth: true
+                            spacing: Kirigami.Units.smallSpacing
+                            Repeater {
+                                model: parent.modelData
+                                delegate: Row {
+                                    required property int index
+                                    required property var modelData
+                                    spacing: 2
+
+                                    Row {
+                                        visible: index > 0
+                                        spacing: 2
+                                        anchors.verticalCenter: parent.verticalCenter
                                         Label {
-                                            visible: !slotCard.hasMember
-                                            anchors.centerIn: parent
-                                            text: "+"
-                                            font.pixelSize: 20
-                                            font.bold: true
-                                            color: popup.isDarkMode ? "#555555" : "#bbbbbb"
+                                            text: "-"
+                                            color: popup.isDarkMode ? "#aaaaaa" : "#555555"
                                         }
+                                        Label {
+                                            text: popup.shortRequirement(modelData.requirements)
+                                            font.pixelSize: 10
+                                            color: popup.isDarkMode ? "#aaaaaa" : "#555555"
+                                        }
+                                    }
 
-                                        // Occupied Slot View
+                                    Item {
+                                        width: 52
+                                        height: 56
                                         Column {
-                                            visible: slotCard.hasMember
-                                            anchors.centerIn: parent
-                                            spacing: 1
-
+                                            width: 52
+                                            spacing: 0
                                             Image {
-                                                id: memberSpriteImg
                                                 anchors.horizontalCenter: parent.horizontalCenter
-                                                width: 40
-                                                height: 40
-                                                source: slotCard.member
-                                                    ? (slotCard.member.sprite && slotCard.member.sprite.length > 0
-                                                        ? slotCard.member.sprite
-                                                        : popup.spriteForName(slotCard.member.name))
-                                                    : ""
+                                                width: 38
+                                                height: 38
+                                                source: modelData.spriteUrl
                                                 fillMode: Image.PreserveAspectFit
                                                 asynchronous: true
                                                 cache: true
-                                                onStatusChanged: {
-                                                    if (status === Image.Error && slotCard.member) {
-                                                        const fallback = slotCard.member.fallbackSprite || popup.spriteForName(slotCard.member.name)
-                                                        if (source != fallback) {
-                                                            source = fallback
-                                                        }
-                                                    }
-                                                }
                                             }
-
                                             Label {
-                                                width: 54
-                                                text: slotCard.member ? slotCard.member.name : ""
+                                                width: parent.width
+                                                text: popup.titleCase(modelData.name)
                                                 horizontalAlignment: Text.AlignHCenter
                                                 font.pixelSize: 9
-                                                font.bold: slotCard.isSelected
+                                                font.bold: modelData.name === popup.pokemonName.toLowerCase()
                                                 elide: Text.ElideRight
                                                 color: popup.isDarkMode ? "#ffffff" : "#171717"
                                             }
                                         }
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                searchField.text = popup.titleCase(modelData.name)
+                                                searchEdited = false
+                                                popup.loadPokemon(modelData.name)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Kirigami.Separator { Layout.fillWidth: true }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Kirigami.Heading {
+                            text: "Moves"
+                            level: 2
+                            Layout.fillWidth: true
+                            color: popup.isDarkMode ? "#ffffff" : "#171717"
+                        }
+                        Label {
+                            visible: popup.selectedMemberIndex >= 0 && popup.selectedMemberIndex < popup.currentTeam.length
+                            text: "Click move → Slot " + (popup.selectedMemberIndex + 1)
+                            font.pixelSize: 10
+                            color: "#e53935"
+                            font.bold: true
+                        }
+                    }
+
+                    Flow {
+                        Layout.fillWidth: true
+                        spacing: 4
+                        visible: popup.availableGenerations.length > 0
+
+                        Repeater {
+                            model: popup.availableGenerations
+                            delegate: Rectangle {
+                                required property string modelData
+                                readonly property bool isSelected: modelData === popup.selectedGeneration
+                                radius: 4
+                                height: 22
+                                width: genLbl.implicitWidth + 10
+                                color: isSelected ? "#e53935" : (popup.isDarkMode ? "#2d2d2d" : "#eeeeee")
+
+                                Label {
+                                    id: genLbl
+                                    anchors.centerIn: parent
+                                    text: modelData
+                                    color: parent.isSelected ? "#ffffff" : (popup.isDarkMode ? "#ffffff" : "#171717")
+                                    font.pixelSize: 10
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: popup.selectGeneration(modelData)
+                                }
+                            }
+                        }
+                    }
+
+                    Flow {
+                        Layout.fillWidth: true
+                        spacing: 4
+                        Repeater {
+                            model: popup.learnableMoves
+                            delegate: Rectangle {
+                                required property var modelData
+                                radius: 4
+                                height: moveLbl.implicitHeight + 6
+                                width: moveLbl.implicitWidth + 10
+                                color: modelData.bgColor || "#a8a878"
+
+                                Label {
+                                    id: moveLbl
+                                    anchors.centerIn: parent
+                                    text: modelData.displayText
+                                    color: "#171717"
+                                    font.pixelSize: 10
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    ToolTip.visible: containsMouse
+                                    ToolTip.delay: 200
+                                    ToolTip.text: modelData.classLabel + " · " + modelData.method + "\nPwr: " + modelData.power + " | Acc: " + modelData.accuracy + "\n" + modelData.description
+                                    onClicked: popup.addMoveToActiveMember(modelData)
+                                }
+                            }
+                        }
+                    }
+
+                    Kirigami.Separator { Layout.fillWidth: true }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Kirigami.Heading {
+                            text: "Teams"
+                            level: 2
+                            Layout.fillWidth: true
+                            color: popup.isDarkMode ? "#ffffff" : "#171717"
+                        }
+                        Button {
+                            text: "+ Add " + popup.pokemonName
+                            implicitHeight: 24
+                            enabled: popup.currentTeam.length < 6 && popup.pokemonName.length > 0
+                            onClicked: popup.addPokemonToTeam()
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 4
+                        Repeater {
+                            model: [1, 2, 3]
+                            delegate: Button {
+                                required property int modelData
+                                text: "Team " + modelData + (popup.activeTeamSlot === modelData ? " ★" : "")
+                                Layout.fillWidth: true
+                                implicitHeight: 26
+                                onClicked: popup.loadTeamSlot(modelData)
+                            }
+                        }
+                    }
+
+                    GridLayout {
+                        Layout.fillWidth: true
+                        columns: 3
+                        rowSpacing: 4
+                        columnSpacing: 4
+
+                        Repeater {
+                            model: 6
+                            delegate: Rectangle {
+                                id: slotCard
+                                required property int index
+                                readonly property bool hasMember: index < popup.currentTeam.length
+                                readonly property var member: hasMember ? popup.currentTeam[index] : null
+                                readonly property bool isSelected: index === popup.selectedMemberIndex
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 56
+                                radius: 4
+                                color: hasMember ? (popup.isDarkMode ? "#242424" : "#f7f7f7") : (popup.isDarkMode ? "#1c1c1c" : "#fafafa")
+                                border.color: isSelected ? "#e53935" : (popup.isDarkMode ? "#3a3a3a" : "#dddddd")
+                                border.width: isSelected ? 2 : 1
+
+                                Label {
+                                    visible: !slotCard.hasMember
+                                    anchors.centerIn: parent
+                                    text: "+"
+                                    font.pixelSize: 18
+                                    color: popup.isDarkMode ? "#555555" : "#bbbbbb"
+                                }
+
+                                RowLayout {
+                                    visible: slotCard.hasMember
+                                    anchors.fill: parent
+                                    anchors.margins: 4
+                                    spacing: 4
+
+                                    Image {
+                                        Layout.preferredWidth: 32
+                                        Layout.preferredHeight: 32
+                                        source: slotCard.member ? slotCard.member.sprite : ""
+                                        fillMode: Image.PreserveAspectFit
+                                    }
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 1
+                                        Label {
+                                            text: slotCard.member ? slotCard.member.name : ""
+                                            font.bold: true
+                                            font.pixelSize: 9
+                                            color: popup.isDarkMode ? "#ffffff" : "#171717"
+                                            elide: Text.ElideRight
+                                        }
+                                        Label {
+                                            text: slotCard.member && slotCard.member.item ? "@ " + slotCard.member.item : "No item"
+                                            font.pixelSize: 8
+                                            color: popup.isDarkMode ? "#aaaaaa" : "#777777"
+                                            elide: Text.ElideRight
+                                        }
+                                    }
+
+                                    Button {
+                                        text: "✕"
+                                        implicitWidth: 18
+                                        implicitHeight: 18
+                                        onClicked: popup.removePokemonFromTeam(slotCard.index)
+                                    }
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    acceptedButtons: Qt.LeftButton
+                                    onClicked: {
+                                        if (slotCard.hasMember) {
+                                            popup.selectedMemberIndex = slotCard.index
+                                            popup.loadPokemon(slotCard.member.name, slotCard.index)
+                                        } else {
+                                            popup.addPokemonToTeam()
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        visible: popup.selectedMemberIndex >= 0 && popup.selectedMemberIndex < popup.currentTeam.length
+                        Layout.fillWidth: true
+                        implicitHeight: activeMemberCol.implicitHeight + 8
+                        radius: 4
+                        color: popup.isDarkMode ? "#222222" : "#f0f0f0"
+
+                        ColumnLayout {
+                            id: activeMemberCol
+                            anchors.fill: parent
+                            anchors.margins: 4
+                            spacing: 4
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Label {
+                                    text: popup.selectedMemberIndex >= 0 && popup.selectedMemberIndex < popup.currentTeam.length ? popup.currentTeam[popup.selectedMemberIndex].name + " Moves:" : ""
+                                    font.bold: true
+                                    font.pixelSize: 10
+                                    color: popup.isDarkMode ? "#ffffff" : "#171717"
+                                }
+                                Item { Layout.fillWidth: true }
+                                TextField {
+                                    Layout.preferredWidth: 90
+                                    Layout.preferredHeight: 22
+                                    placeholderText: "Held item..."
+                                    font.pixelSize: 9
+                                    text: popup.selectedMemberIndex >= 0 && popup.selectedMemberIndex < popup.currentTeam.length ? (popup.currentTeam[popup.selectedMemberIndex].item || "") : ""
+                                    onTextChanged: {
+                                        if (popup.selectedMemberIndex >= 0 && popup.selectedMemberIndex < popup.currentTeam.length) {
+                                            popup.updateActiveMemberItem(text)
+                                        }
+                                    }
+                                }
+                            }
+
+                            Flow {
+                                Layout.fillWidth: true
+                                spacing: 4
+                                Repeater {
+                                    model: popup.selectedMemberIndex >= 0 && popup.selectedMemberIndex < popup.currentTeam.length ? popup.currentTeam[popup.selectedMemberIndex].moves : []
+                                    delegate: Rectangle {
+                                        required property var modelData
+                                        required property int index
+                                        radius: 4
+                                        height: 20
+                                        width: memberMoveLbl.implicitWidth + 14
+                                        color: modelData.bgColor || "#a8a878"
+
+                                        Label {
+                                            id: memberMoveLbl
+                                            anchors.centerIn: parent
+                                            text: modelData.name + " ✕"
+                                            font.pixelSize: 9
+                                            color: "#171717"
+                                            font.bold: true
+                                        }
 
                                         MouseArea {
                                             anchors.fill: parent
                                             cursorShape: Qt.PointingHandCursor
-                                            hoverEnabled: true
-                                            ToolTip.visible: containsMouse
-                                            ToolTip.delay: 200
-                                            ToolTip.text: slotCard.hasMember
-                                                ? (slotCard.member.name + (slotCard.member.item ? " @ " + slotCard.member.item : "") + "\n(" + (slotCard.member.moves ? slotCard.member.moves.length : 0) + "/4 moves)\nClick to load & edit")
-                                                : ("Add " + popup.pokemonName + " to slot " + (slotCard.index + 1))
-                                            onClicked: {
-                                                if (slotCard.hasMember) {
-                                                    popup.selectedMemberIndex = slotCard.index
-                                                    if (popup.pokemonName.toLowerCase() !== slotCard.member.name.toLowerCase()) {
-                                                        searchField.text = slotCard.member.name
-                                                        popup.searchEdited = false
-                                                        popup.loadPokemon(slotCard.member.name, slotCard.index)
-                                                    }
-                                                } else {
-                                                    popup.addPokemonToTeam()
-                                                }
-                                            }
-                                        }
-
-                                        // Quick Remove "✕" Badge
-                                        Rectangle {
-                                            visible: slotCard.hasMember
-                                            anchors.top: parent.top
-                                            anchors.right: parent.right
-                                            anchors.margins: 3
-                                            width: 14
-                                            height: 14
-                                            radius: 7
-                                            color: popup.isDarkMode ? "#3a3a3a" : "#e0e0e0"
-
-                                            Label {
-                                                anchors.centerIn: parent
-                                                text: "✕"
-                                                font.pixelSize: 8
-                                                font.bold: true
-                                                color: popup.isDarkMode ? "#ffffff" : "#171717"
-                                            }
-
-                                            MouseArea {
-                                                anchors.fill: parent
-                                                cursorShape: Qt.PointingHandCursor
-                                                onClicked: popup.removePokemonFromTeam(slotCard.index)
-                                            }
+                                            onClicked: popup.removeMoveFromActiveMember(index)
                                         }
                                     }
                                 }
                             }
-
-                            // Active Team Member's Held Item & Moves
-                            Rectangle {
-                                visible: popup.selectedMemberIndex >= 0 && popup.selectedMemberIndex < popup.currentTeam.length
-                                Layout.fillWidth: true
-                                implicitHeight: memberDetailsCol.implicitHeight + 12
-                                radius: 6
-                                color: popup.isDarkMode ? "#222222" : "#f5f5f5"
-                                border.color: popup.isDarkMode ? "#383838" : "#dddddd"
-                                border.width: 1
-
-                                ColumnLayout {
-                                    id: memberDetailsCol
-                                    anchors.fill: parent
-                                    anchors.margins: 6
-                                    spacing: 4
-
-                                    RowLayout {
-                                        Layout.fillWidth: true
-                                        Label {
-                                            text: (popup.selectedMemberIndex >= 0 && popup.selectedMemberIndex < popup.currentTeam.length)
-                                                ? popup.currentTeam[popup.selectedMemberIndex].name
-                                                : ""
-                                            font.bold: true
-                                            font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                            color: popup.isDarkMode ? "#ffffff" : "#171717"
-                                        }
-
-                                        Item { Layout.fillWidth: true }
-
-                                        // Held Item Input Field
-                                        TextField {
-                                            id: itemField
-                                            Layout.preferredWidth: 110
-                                            Layout.preferredHeight: 24
-                                            placeholderText: "Held Item…"
-                                            font.pixelSize: 10
-                                            text: (popup.selectedMemberIndex >= 0 && popup.selectedMemberIndex < popup.currentTeam.length)
-                                                ? (popup.currentTeam[popup.selectedMemberIndex].item || "")
-                                                : ""
-                                            palette.text: popup.isDarkMode ? "#ffffff" : "#171717"
-                                            palette.placeholderText: popup.isDarkMode ? "#888888" : "#777777"
-                                            palette.base: popup.isDarkMode ? "#2d2d2d" : "#ffffff"
-                                            onTextChanged: {
-                                                if (popup.selectedMemberIndex >= 0 && popup.selectedMemberIndex < popup.currentTeam.length) {
-                                                    popup.updateActiveMemberItem(text)
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    Label {
-                                        visible: popup.selectedMemberIndex >= 0
-                                            && popup.selectedMemberIndex < popup.currentTeam.length
-                                            && popup.currentTeam[popup.selectedMemberIndex].moves.length === 0
-                                        text: "Click any move pill above to assign it."
-                                        font.pixelSize: 10
-                                        color: popup.isDarkMode ? "#aaaaaa" : "#666666"
-                                    }
-
-                                    Flow {
-                                        Layout.fillWidth: true
-                                        spacing: 4
-
-                                        Repeater {
-                                            model: (popup.selectedMemberIndex >= 0 && popup.selectedMemberIndex < popup.currentTeam.length)
-                                                ? popup.currentTeam[popup.selectedMemberIndex].moves
-                                                : []
-                                            delegate: Rectangle {
-                                                required property var modelData
-                                                required property int index
-                                                radius: 4
-                                                height: assignedMoveLbl.implicitHeight + 8
-                                                width: assignedMoveLbl.implicitWidth + 12
-                                                color: modelData.bgColor || "#a8a878"
-                                                border.color: "#222222"
-                                                border.width: 1
-
-                                                Label {
-                                                    id: assignedMoveLbl
-                                                    anchors.centerIn: parent
-                                                    text: modelData.name + " · " + modelData.power + "/" + modelData.accuracy + " ✕"
-                                                    color: "#171717"
-                                                    font.pixelSize: 10
-                                                    font.bold: true
-                                                }
-
-                                                MouseArea {
-                                                    anchors.fill: parent
-                                                    hoverEnabled: true
-                                                    cursorShape: Qt.PointingHandCursor
-                                                    ToolTip.visible: containsMouse
-                                                    ToolTip.delay: 200
-                                                    ToolTip.text: (modelData.classLabel || "Move") + " · " + (modelData.method || "") +
-                                                                  "\nPower: " + modelData.power + " | Accuracy: " + modelData.accuracy +
-                                                                  "\n" + (modelData.description || "") +
-                                                                  "\n\nClick to remove"
-                                                    onClicked: popup.removeMoveFromActiveMember(index)
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            // --- TEAM TYPE WEAKNESS SUMMARY ---
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                visible: popup.teamWeaknesses.length > 0
-                                spacing: 4
-
-                                Kirigami.Heading {
-                                    text: "Team Weaknesses (2×+)"
-                                    level: 3
-                                    color: popup.isDarkMode ? "#ffffff" : "#171717"
-                                }
-
-                                Flow {
-                                    Layout.fillWidth: true
-                                    spacing: 4
-                                    Repeater {
-                                        model: popup.teamWeaknesses
-                                        delegate: Rectangle {
-                                            required property var modelData
-                                            radius: 4
-                                            height: weakLbl.implicitHeight + 6
-                                            width: weakLbl.implicitWidth + 10
-                                            color: modelData.color
-                                            border.color: "#222222"
-                                            border.width: 1
-
-                                            Label {
-                                                id: weakLbl
-                                                anchors.centerIn: parent
-                                                text: modelData.name + " (" + modelData.count + ")"
-                                                color: modelData.textColor
-                                                font.bold: true
-                                                font.pixelSize: 10
-                                            }
-
-                                            MouseArea {
-                                                anchors.fill: parent
-                                                hoverEnabled: true
-                                                cursorShape: Qt.PointingHandCursor
-                                                ToolTip.visible: containsMouse
-                                                ToolTip.delay: 200
-                                                ToolTip.text: "Vulnerable Pokémon:\n" + modelData.pokemonList
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
                         }
                     }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        visible: popup.teamWeaknesses.length > 0
+                        spacing: 2
+
+                        Kirigami.Heading {
+                            text: "Team Weaknesses (2×+)"
+                            level: 3
+                            color: popup.isDarkMode ? "#ffffff" : "#171717"
+                        }
+
+                        Flow {
+                            Layout.fillWidth: true
+                            spacing: 4
+                            Repeater {
+                                model: popup.teamWeaknesses
+                                delegate: Rectangle {
+                                    required property var modelData
+                                    radius: 4
+                                    height: 20
+                                    width: weakLbl.implicitWidth + 10
+                                    color: modelData.color
+
+                                    Label {
+                                        id: weakLbl
+                                        anchors.centerIn: parent
+                                        text: modelData.name + " (" + modelData.count + ")"
+                                        color: modelData.textColor
+                                        font.bold: true
+                                        font.pixelSize: 9
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        ToolTip.visible: containsMouse
+                                        ToolTip.delay: 200
+                                        ToolTip.text: modelData.pokemonList
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                 }
             }
         }
