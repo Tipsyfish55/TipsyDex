@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.LocalStorage
 import org.kde.plasma.plasmoid
 import org.kde.kirigami as Kirigami
 
@@ -31,6 +32,7 @@ PlasmoidItem {
         implicitHeight: 570
         
         property bool isDarkMode: false
+        property bool showTeamBuilder: false
 
         color: isDarkMode ? "#181818" : Kirigami.Theme.backgroundColor
         radius: Kirigami.Units.largeSpacing
@@ -64,9 +66,89 @@ PlasmoidItem {
         property var availableGenerations: []
         property var learnableMoves: []
 
+        // Team Builder state
+        property var savedTeams: []
+        property var currentTeamMoves: []
+
         Component.onCompleted: {
             loadPokemon("charmander")
             loadSpeciesNames()
+            initDatabase()
+        }
+
+        function getDatabase() {
+            return LocalStorage.openDatabaseSync("PlasmaDexDB", "1.0", "Saved Pokemon Teams", 1000000)
+        }
+
+        function initDatabase() {
+            try {
+                const db = getDatabase()
+                db.transaction(function(tx) {
+                    tx.executeSql('CREATE TABLE IF NOT EXISTS teams (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, generation TEXT, pokemon TEXT, moves TEXT);')
+                })
+                loadSavedTeams()
+            } catch (err) {
+                console.log("DB Init Error: " + err)
+            }
+        }
+
+        function loadSavedTeams() {
+            try {
+                const db = getDatabase()
+                db.transaction(function(tx) {
+                    const rs = tx.executeSql('SELECT * FROM teams;')
+                    let items = []
+                    for (let i = 0; i < rs.rows.length; i++) {
+                        items.push({
+                            id: rs.rows.item(i).id,
+                            name: rs.rows.item(i).name,
+                            generation: rs.rows.item(i).generation,
+                            pokemon: rs.rows.item(i).pokemon,
+                            moves: JSON.parse(rs.rows.item(i).moves || "[]")
+                        })
+                    }
+                    savedTeams = items
+                })
+            } catch (err) {
+                console.log("Load Teams Error: " + err)
+            }
+        }
+
+        function saveCurrentTeamToDb(teamName) {
+            if (!pokemonName) return
+            try {
+                const db = getDatabase()
+                db.transaction(function(tx) {
+                    tx.executeSql('INSERT INTO teams (name, generation, pokemon, moves) VALUES (?, ?, ?, ?);',
+                        [teamName || ("Team - " + pokemonName), selectedGeneration, pokemonName, JSON.stringify(currentTeamMoves)])
+                })
+                loadSavedTeams()
+                statusText = "Saved " + pokemonName + " to team!"
+            } catch (err) {
+                errorText = "Could not save team."
+            }
+        }
+
+        function deleteTeamFromDb(teamId) {
+            try {
+                const db = getDatabase()
+                db.transaction(function(tx) {
+                    tx.executeSql('DELETE FROM teams WHERE id = ?;', [teamId])
+                })
+                loadSavedTeams()
+            } catch (err) {}
+        }
+
+        function addMoveToTeam(moveName) {
+            if (currentTeamMoves.indexOf(moveName) < 0 && currentTeamMoves.length < 4) {
+                currentTeamMoves.push(moveName)
+                currentTeamMoves = currentTeamMoves.slice() // trigger binding update
+            }
+        }
+
+        function removeMoveFromTeam(index) {
+            currentTeamMoves.splice(index, 1)
+            currentTeamMoves = currentTeamMoves.slice()
         }
 
         function selectGeneration(genName) {
@@ -290,6 +372,7 @@ PlasmoidItem {
             animatedUrl = ""
             animatedShinyUrl = ""
             flavorText = ""
+            currentTeamMoves = []
             
             categorizedMoves = {}
             selectedGeneration = ""
@@ -589,6 +672,17 @@ PlasmoidItem {
 
                     RowLayout {
                         Layout.fillWidth: true
+
+                        ToolButton {
+                            icon.name: "application-menu"
+                            display: AbstractButton.IconOnly
+                            Accessible.name: "Team Builder Menu"
+                            ToolTip.text: "Manage Teams & Moves"
+                            implicitWidth: 28
+                            implicitHeight: 28
+                            onClicked: popup.showTeamBuilder = !popup.showTeamBuilder
+                        }
+
                         Kirigami.Heading {
                             text: "PlasmaDex"
                             level: 2
@@ -759,6 +853,118 @@ PlasmoidItem {
                 ColumnLayout {
                     anchors.fill: parent
                     anchors.margins: Kirigami.Units.smallSpacing
+
+                    // TEAM BUILDER OVERLAY PANEL
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: popup.showTeamBuilder ? implicitHeight : 0
+                        visible: popup.showTeamBuilder
+                        spacing: 6
+                        clip: true
+
+                        Kirigami.Heading {
+                            text: "Team Builder & Custom Moves"
+                            level: 3
+                            color: popup.isDarkMode ? "#ffffff" : "#171717"
+                        }
+
+                        Label {
+                            text: "Selected: " + popup.pokemonName + " (" + popup.selectedGeneration + ")"
+                            color: popup.isDarkMode ? "#aaaaaa" : "#555555"
+                            font.pixelSize: Kirigami.Theme.smallFont.pixelSize
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 4
+                            Label {
+                                text: "Moves (" + popup.currentTeamMoves.length + "/4):"
+                                color: popup.isDarkMode ? "#ffffff" : "#171717"
+                                font.bold: true
+                            }
+                        }
+
+                        Flow {
+                            Layout.fillWidth: true
+                            spacing: 4
+                            Repeater {
+                                model: popup.currentTeamMoves
+                                delegate: Rectangle {
+                                    required property string modelData
+                                    required property int index
+                                    radius: 4
+                                    height: 24
+                                    width: moveText.implicitWidth + 16
+                                    color: "#e53935"
+
+                                    Label {
+                                        id: moveText
+                                        anchors.centerIn: parent
+                                        text: modelData + " ✕"
+                                        color: "#ffffff"
+                                        font.pixelSize: Kirigami.Theme.smallFont.pixelSize
+                                    }
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        onClicked: popup.removeMoveFromTeam(index)
+                                    }
+                                }
+                            }
+                        }
+
+                        Button {
+                            text: "Save " + popup.pokemonName + " to Local Team"
+                            Layout.fillWidth: true
+                            onClicked: popup.saveCurrentTeamToDb("Team - " + popup.pokemonName + " (" + popup.selectedGeneration + ")")
+                        }
+
+                        Kirigami.Heading {
+                            text: "Saved Teams (" + popup.savedTeams.length + ")"
+                            level: 4
+                            color: popup.isDarkMode ? "#ffffff" : "#171717"
+                        }
+
+                        ListView {
+                            id: savedTeamsList
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: Math.min(popup.savedTeams.length * 36, 110)
+                            clip: true
+                            model: popup.savedTeams
+                            delegate: Rectangle {
+                                required property var modelData
+                                width: savedTeamsList.width
+                                height: 32
+                                color: popup.isDarkMode ? "#252525" : "#f0f0f0"
+                                radius: 4
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.margins: 4
+                                    Label {
+                                        Layout.fillWidth: true
+                                        text: modelData.name + " [" + modelData.generation + "]"
+                                        color: popup.isDarkMode ? "#ffffff" : "#171717"
+                                        font.pixelSize: Kirigami.Theme.smallFont.pixelSize
+                                        elide: Text.ElideRight
+                                    }
+                                    Button {
+                                        text: "Load"
+                                        implicitWidth: 45
+                                        implicitHeight: 24
+                                        onClicked: popup.loadPokemon(modelData.pokemon)
+                                    }
+                                    Button {
+                                        text: "Del"
+                                        implicitWidth: 40
+                                        implicitHeight: 24
+                                        onClicked: popup.deleteTeamFromDb(modelData.id)
+                                    }
+                                }
+                            }
+                        }
+
+                        Kirigami.Separator { Layout.fillWidth: true }
+                    }
 
                     ScrollView {
                         id: bodyScroll
@@ -1162,7 +1368,7 @@ PlasmoidItem {
                             }
                             
                             Kirigami.Heading {
-                                text: "Moves"
+                                text: "Moves (Click to add to team)"
                                 level: 2
                                 color: popup.isDarkMode ? "#ffffff" : "#171717"
                             }
@@ -1228,9 +1434,11 @@ PlasmoidItem {
                                         MouseArea {
                                             anchors.fill: parent
                                             hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
                                             ToolTip.visible: containsMouse
                                             ToolTip.delay: 200
-                                            ToolTip.text: modelData.classLabel + " · " + modelData.method
+                                            ToolTip.text: "Click to add " + modelData.name + " to team"
+                                            onClicked: popup.addMoveToTeam(modelData.name)
                                         }
                                     }
                                 }
