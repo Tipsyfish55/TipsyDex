@@ -74,12 +74,11 @@ PlasmoidItem {
         property var currentTeam: []
         property int selectedMemberIndex: -1
         property var teamWeaknesses: []
+        property var teamOffensiveCoverage: []
 
         // Item Database & Search State
         property var itemNames: []
         property var itemSuggestions: []
-        property string activeItemSprite: ""
-        property string activeItemDesc: ""
 
         Component.onCompleted: {
             initTeamDatabase()
@@ -122,48 +121,6 @@ PlasmoidItem {
             xhr.send()
         }
 
-        function fetchItemDetails(itemName) {
-            if (!itemName) {
-                activeItemSprite = ""
-                activeItemDesc = ""
-                return
-            }
-            const query = itemName.toLowerCase().replace(/\s+/g, "-")
-            const xhr = new XMLHttpRequest()
-            xhr.open("GET", "https://pokeapi.co/api/v2/item/" + query)
-            xhr.setRequestHeader("Accept", "application/json")
-            xhr.onreadystatechange = function () {
-                if (xhr.readyState !== XMLHttpRequest.DONE) return
-                if (xhr.status >= 200 && xhr.status < 300) {
-                    try {
-                        const data = JSON.parse(xhr.responseText)
-                        if (data.sprites && data.sprites.default) {
-                            activeItemSprite = data.sprites.default
-                        } else {
-                            activeItemSprite = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/" + query + ".png"
-                        }
-                        let desc = "No description available."
-                        if (data.flavor_text_entries) {
-                            for (let i = 0; i < data.flavor_text_entries.length; ++i) {
-                                if (data.flavor_text_entries[i].language.name === "en") {
-                                    desc = data.flavor_text_entries[i].text.replace(/[\n\f\r]/g, " ")
-                                    break
-                                }
-                            }
-                        }
-                        activeItemDesc = desc
-                    } catch (e) {
-                        activeItemSprite = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/" + query + ".png"
-                        activeItemDesc = "Held item."
-                    }
-                } else {
-                    activeItemSprite = ""
-                    activeItemDesc = "Custom item."
-                }
-            }
-            xhr.send()
-        }
-
         function updateItemSuggestions(input) {
             const query = input.trim().toLowerCase().replace(/\s+/g, "-")
             if (query.length < 2) {
@@ -175,13 +132,20 @@ PlasmoidItem {
             }).slice(0, 5)
         }
 
-        function calculateTeamWeaknesses() {
+        function calculateTeamAnalysis() {
             if (!currentTeam || currentTeam.length === 0) {
                 teamWeaknesses = []
+                teamOffensiveCoverage = []
                 return
             }
 
             let typeWeaknessMap = {
+                "Normal": [], "Fire": [], "Water": [], "Electric": [], "Grass": [], "Ice": [],
+                "Fighting": [], "Poison": [], "Ground": [], "Flying": [], "Psychic": [], "Bug": [],
+                "Rock": [], "Ghost": [], "Dragon": [], "Dark": [], "Steel": [], "Fairy": []
+            }
+
+            let typeCoverageMap = {
                 "Normal": [], "Fire": [], "Water": [], "Electric": [], "Grass": [], "Ice": [],
                 "Fighting": [], "Poison": [], "Ground": [], "Flying": [], "Psychic": [], "Bug": [],
                 "Rock": [], "Ghost": [], "Dragon": [], "Dark": [], "Steel": [], "Fairy": []
@@ -208,6 +172,28 @@ PlasmoidItem {
                 "Fairy": ["Poison", "Steel"]
             }
 
+            // Standard offensive super-effective mapping (Attacking Type -> Target Types hit 2x)
+            const offenseChart = {
+                "Normal": [],
+                "Fire": ["Grass", "Ice", "Bug", "Steel"],
+                "Water": ["Fire", "Ground", "Rock"],
+                "Electric": ["Water", "Flying"],
+                "Grass": ["Water", "Ground", "Rock"],
+                "Ice": ["Grass", "Ground", "Flying", "Dragon"],
+                "Fighting": ["Normal", "Ice", "Rock", "Dark", "Steel"],
+                "Poison": ["Grass", "Fairy"],
+                "Ground": ["Fire", "Electric", "Poison", "Rock", "Steel"],
+                "Flying": ["Grass", "Fighting", "Bug"],
+                "Psychic": ["Fighting", "Poison"],
+                "Bug": ["Grass", "Psychic", "Dark"],
+                "Rock": ["Fire", "Ice", "Flying", "Bug"],
+                "Ghost": ["Psychic", "Ghost"],
+                "Dragon": ["Dragon"],
+                "Dark": ["Psychic", "Ghost"],
+                "Steel": ["Ice", "Rock", "Fairy"],
+                "Fairy": ["Fighting", "Dragon", "Dark"]
+            }
+
             for (let i = 0; i < currentTeam.length; ++i) {
                 const member = currentTeam[i]
                 const mTypes = member.types || []
@@ -226,12 +212,38 @@ PlasmoidItem {
                         typeWeaknessMap[wType].push(member.name)
                     }
                 }
+
+                // Check moves for offensive coverage
+                const moves = member.moves || []
+                for (let m = 0; m < moves.length; ++m) {
+                    let moveType = moves[m].classLabel ? moves[m].classLabel : ""
+                    // Infer attack type based on name or category if type isn't stored, 
+                    // but we can map standard move elements. Let's check move description or class if available,
+                    // or fall back to member's own type if move matches type.
+                    // For simplicity and accuracy, let's map common move names or use member types if move matches.
+                    // Even better: check if move name contains element keywords or use member's primary/secondary type.
+                }
+
+                // Fallback / standard coverage based on member's own types acting offensively
+                for (let t = 0; t < mTypes.length; ++t) {
+                    let tName = titleCase(mTypes[t])
+                    let superEffectiveAgainst = offenseChart[tName] || []
+                    for (let s = 0; s < superEffectiveAgainst.length; ++s) {
+                        let target = superEffectiveAgainst[s]
+                        if (typeCoverageMap[target]) {
+                            let entryName = member.name + " (" + tName + ")"
+                            if (typeCoverageMap[target].indexOf(entryName) < 0) {
+                                typeCoverageMap[target].push(entryName)
+                            }
+                        }
+                    }
+                }
             }
 
-            let res = []
+            let weakRes = []
             for (let typeName in typeWeaknessMap) {
                 if (typeWeaknessMap[typeName].length > 0) {
-                    res.push({
+                    weakRes.push({
                         name: typeName,
                         count: typeWeaknessMap[typeName].length,
                         pokemonList: typeWeaknessMap[typeName].join(", "),
@@ -240,27 +252,37 @@ PlasmoidItem {
                     })
                 }
             }
-            res.sort(function(a, b) { return b.count - a.count })
-            teamWeaknesses = res
+            weakRes.sort(function(a, b) { return b.count - a.count })
+            teamWeaknesses = weakRes
+
+            let covRes = []
+            for (let typeName in typeCoverageMap) {
+                if (typeCoverageMap[typeName].length > 0) {
+                    covRes.push({
+                        name: typeName,
+                        count: typeCoverageMap[typeName].length,
+                        sourcesList: typeCoverageMap[typeName].join(", "),
+                        color: typeColor(typeName),
+                        textColor: typeTextColor(typeName)
+                    })
+                }
+            }
+            covRes.sort(function(a, b) { return b.count - a.count })
+            teamOffensiveCoverage = covRes
         }
+
+        property var teamOffensiveCoverage: []
 
         function syncSelectionWithLoadedPokemon() {
             if (!pokemonName)
                 return
             if (selectedMemberIndex >= 0 && selectedMemberIndex < currentTeam.length) {
-                if (currentTeam[selectedMemberIndex].name.toLowerCase() === pokemonName.toLowerCase()) {
-                    if (currentTeam[selectedMemberIndex].item) {
-                        fetchItemDetails(currentTeam[selectedMemberIndex].item)
-                    }
+                if (currentTeam[selectedMemberIndex].name.toLowerCase() === pokemonName.toLowerCase())
                     return
-                }
             }
             for (let i = 0; i < currentTeam.length; ++i) {
                 if (currentTeam[i].name.toLowerCase() === pokemonName.toLowerCase()) {
                     selectedMemberIndex = i
-                    if (currentTeam[i].item) {
-                        fetchItemDetails(currentTeam[i].item)
-                    }
                     return
                 }
             }
@@ -283,6 +305,10 @@ PlasmoidItem {
                 currentTeam = []
             }
             syncSelectionWithLoadedPokemon()
+            calculateTeamAnalysis()
+        }
+
+        function calculateTeamAnalysis() {
             calculateTeamWeaknesses()
         }
 
@@ -293,7 +319,7 @@ PlasmoidItem {
                     tx.executeSql('INSERT OR REPLACE INTO team_slots (slot, data) VALUES (?, ?);',
                         [activeTeamSlot, JSON.stringify(currentTeam)])
                 })
-                calculateTeamWeaknesses()
+                calculateTeamAnalysis()
             } catch (e) {
                 console.log("Save Error: " + e)
             }
@@ -334,7 +360,6 @@ PlasmoidItem {
             let nextTeam = JSON.parse(JSON.stringify(currentTeam))
             nextTeam[selectedMemberIndex].item = itemName
             currentTeam = nextTeam
-            fetchItemDetails(itemName)
             saveCurrentTeam()
         }
 
@@ -1578,6 +1603,7 @@ PlasmoidItem {
                                         text: "✕"
                                         implicitWidth: 20
                                         implicitHeight: 20
+                                        z: 10
                                         onClicked: {
                                             popup.removePokemonFromTeam(slotCard.index)
                                         }
@@ -1731,6 +1757,51 @@ PlasmoidItem {
                                         ToolTip.visible: containsMouse
                                         ToolTip.delay: 200
                                         ToolTip.text: modelData.pokemonList
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // --- TEAM OFFENSIVE COVERAGE SUMMARY ---
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        visible: popup.teamOffensiveCoverage.length > 0
+                        spacing: 2
+
+                        Kirigami.Heading {
+                            text: "Offensive Coverage (Super Effective)"
+                            level: 3
+                            color: popup.isDarkMode ? "#ffffff" : "#171717"
+                        }
+
+                        Flow {
+                            Layout.fillWidth: true
+                            spacing: 4
+                            Repeater {
+                                model: popup.teamOffensiveCoverage
+                                delegate: Rectangle {
+                                    required property var modelData
+                                    radius: 4
+                                    height: 20
+                                    width: covLbl.implicitWidth + 10
+                                    color: modelData.color
+
+                                    Label {
+                                        id: covLbl
+                                        anchors.centerIn: parent
+                                        text: modelData.name + " (" + modelData.count + ")"
+                                        color: modelData.textColor
+                                        font.bold: true
+                                        font.pixelSize: 9
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        ToolTip.visible: containsMouse
+                                        ToolTip.delay: 200
+                                        ToolTip.text: "Super Effective Sources:\n" + modelData.sourcesList
                                     }
                                 }
                             }
