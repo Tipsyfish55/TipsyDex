@@ -43,6 +43,7 @@ PlasmoidItem {
         property string spriteUrl: ""
         property string shinyUrl: ""
         property string animatedUrl: ""
+        property string animatedShinyUrl: ""
         property string heightText: ""
         property string weightText: ""
         property string flavorText: ""
@@ -287,6 +288,7 @@ PlasmoidItem {
             spriteUrl = ""
             shinyUrl = ""
             animatedUrl = ""
+            animatedShinyUrl = ""
             flavorText = ""
             
             categorizedMoves = {}
@@ -458,6 +460,7 @@ PlasmoidItem {
                 spriteUrl = "https://img.pokemondb.net/sprites/home/normal/" + fileName + ".png"
                 shinyUrl = "https://img.pokemondb.net/sprites/home/shiny/" + fileName + ".png"
                 animatedUrl = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/showdown/" + pokemon.id + ".gif"
+                animatedShinyUrl = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/showdown/shiny/" + pokemon.id + ".gif"
                 
                 requestJson(pokemon.species.url, requestId, function (species) {
                     const entries = species.flavor_text_entries || []
@@ -842,13 +845,13 @@ PlasmoidItem {
                                 }
                                 Column {
                                     spacing: 0
-                                    Image {
+                                    AnimatedImage {
                                         width: 48
                                         height: 48
-                                        source: popup.shinyUrl
+                                        source: popup.animatedShinyUrl
                                         fillMode: Image.PreserveAspectFit
                                         asynchronous: true
-                                        cache: true
+                                        playing: true
                                     }
                                 }
                             }
