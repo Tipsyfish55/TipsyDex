@@ -407,7 +407,7 @@ PlasmoidItem {
 
                                     pendingMovesCount--
                                     if (pendingMovesCount === 0) {
-                                        finalizeAndSortAllGenerations()
+                                        sortAndFinalizeAllGenerations()
                                     }
                                 }
                                 mxhr.send()
@@ -417,14 +417,15 @@ PlasmoidItem {
                 }
 
                 if (pendingMovesCount === 0) {
-                    finalizeAndSortAllGenerations()
+                    sortAndFinalizeAllGenerations()
                 }
 
-                function finalizeAndSortAllGenerations() {
+                function sortAndFinalizeAllGenerations() {
                     let gens = []
                     for (let i = 1; i <= 9; ++i) {
                         let g = "Gen " + i
                         if (tempCategorized[g].length > 0) {
+                            // Sort strictly: Level-up moves first, ordered from lowest to highest level
                             tempCategorized[g].sort(function(a, b) {
                                 let aIsLevel = (a.method === "Level Up")
                                 let bIsLevel = (b.method === "Level Up")
