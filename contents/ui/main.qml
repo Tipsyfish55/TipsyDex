@@ -103,85 +103,64 @@ PlasmoidItem {
                 return
             }
 
-            const allTypes = [
-                "normal", "fire", "water", "electric", "grass", "ice", "fighting", "poison", "ground",
-                "flying", "psychic", "bug", "rock", "ghost", "dragon", "dark", "steel", "fairy"
-            ]
-
-            let weaknessMap = {}
-            for (let t = 0; t < allTypes.length; ++t) {
-                weaknessMap[allTypes[t]] = []
+            // Simple robust offline defense tally based on member types
+            let typeWeaknessMap = {
+                "Normal": [], "Fire": [], "Water": [], "Electric": [], "Grass": [], "Ice": [],
+                "Fighting": [], "Poison": [], "Ground": [], "Flying": [], "Psychic": [], "Bug": [],
+                "Rock": [], "Ghost": [], "Dragon": [], "Dark": [], "Steel": [], "Fairy": []
             }
 
-            let membersProcessed = 0
+            // Basic chart multipliers for common types
+            const weakChart = {
+                "Normal": ["Fighting"],
+                "Fire": ["Water", "Ground", "Rock"],
+                "Water": ["Electric", "Grass"],
+                "Electric": ["Ground"],
+                "Grass": ["Fire", "Ice", "Poison", "Flying", "Bug"],
+                "Ice": ["Fire", "Fighting", "Rock", "Steel"],
+                "Fighting": ["Flying", "Psychic", "Fairy"],
+                "Poison": ["Ground", "Psychic"],
+                "Ground": ["Water", "Grass", "Ice"],
+                "Flying": ["Electric", "Ice", "Rock"],
+                "Psychic": ["Bug", "Ghost", "Dark"],
+                "Bug": ["Fire", "Flying", "Rock"],
+                "Rock": ["Water", "Grass", "Fighting", "Ground", "Steel"],
+                "Ghost": ["Ghost", "Dark"],
+                "Dragon": ["Ice", "Dragon", "Fairy"],
+                "Dark": ["Fighting", "Bug", "Fairy"],
+                "Steel": ["Fire", "Fighting", "Ground"],
+                "Fairy": ["Poison", "Steel"]
+            }
+
             for (let i = 0; i < currentTeam.length; ++i) {
                 const member = currentTeam[i]
-                const memberTypes = member.types || []
-                if (memberTypes.length === 0) {
-                    membersProcessed++
-                    if (membersProcessed === currentTeam.length) finalizeWeaknesses(weaknessMap)
-                    continue
+                const mTypes = member.types || []
+                let memberWeakTypes = {}
+
+                for (let t = 0; t < mTypes.length; ++t) {
+                    let tName = titleCase(mTypes[t])
+                    let weaknesses = weakChart[tName] || []
+                    for (let w = 0; w < weaknesses.length; ++w) {
+                        memberWeakTypes[weaknesses[w]] = true
+                    }
                 }
 
-                let memberMults = {}
-                for (let t = 0; t < allTypes.length; ++t) memberMults[allTypes[t]] = 1
-
-                let typesRemaining = memberTypes.length
-                for (let mt = 0; mt < memberTypes.length; ++mt) {
-                    const tName = memberTypes[mt].toLowerCase()
-                    const xhr = new XMLHttpRequest()
-                    xhr.open("GET", "https://pokeapi.co/api/v2/type/" + tName)
-                    xhr.setRequestHeader("Accept", "application/json")
-                    xhr.onreadystatechange = function() {
-                        if (xhr.readyState !== XMLHttpRequest.DONE) return
-                        if (xhr.status >= 200 && xhr.status < 300) {
-                            try {
-                                const data = JSON.parse(xhr.responseText)
-                                const rel = data.damage_relations
-                                const doubleFrom = rel.double_damage_from || []
-                                const halfFrom = rel.half_damage_from || []
-                                const noFrom = rel.no_damage_from || []
-
-                                for (let d = 0; d < doubleFrom.length; ++d) {
-                                    memberMults[doubleFrom[d].name] *= 2
-                                }
-                                for (let h = 0; h < halfFrom.length; ++h) {
-                                    memberMults[halfFrom[h].name] *= 0.5
-                                }
-                                for (let n = 0; n < noFrom.length; ++n) {
-                                    memberMults[noFrom[n].name] *= 0
-                                }
-                            } catch (e) {}
-                        }
-                        typesRemaining--
-                        if (typesRemaining === 0) {
-                            for (let t = 0; t < allTypes.length; ++t) {
-                                if (memberMults[allTypes[t]] > 1) {
-                                    if (!weaknessMap[allTypes[t]]) weaknessMap[allTypes[t]] = []
-                                    weaknessMap[allTypes[t]].push(member.name + " (" + memberMults[allTypes[t]] + "×)")
-                                }
-                            }
-                            membersProcessed++
-                            if (membersProcessed === currentTeam.length) {
-                                finalizeWeaknesses(weaknessMap)
-                            }
-                        }
+                for (let wType in memberWeakTypes) {
+                    if (typeWeaknessMap[wType]) {
+                        typeWeaknessMap[wType].push(member.name)
                     }
-                    xhr.send()
                 }
             }
-        }
 
-        function finalizeWeaknesses(map) {
             let res = []
-            for (let type in map) {
-                if (map[type].length > 0) {
+            for (let typeName in typeWeaknessMap) {
+                if (typeWeaknessMap[typeName].length > 0) {
                     res.push({
-                        name: titleCase(type),
-                        count: map[type].length,
-                        pokemonList: map[type].join(", "),
-                        color: typeColor(type),
-                        textColor: typeTextColor(type)
+                        name: typeName,
+                        count: typeWeaknessMap[typeName].length,
+                        pokemonList: typeWeaknessMap[typeName].join(", "),
+                        color: typeColor(typeName),
+                        textColor: typeTextColor(typeName)
                     })
                 }
             }
