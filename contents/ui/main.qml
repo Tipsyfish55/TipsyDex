@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import QtQuick.LocalStorage
 import org.kde.plasma.plasmoid
 import org.kde.kirigami as Kirigami
 
@@ -32,7 +31,6 @@ PlasmoidItem {
         implicitHeight: 570
         
         property bool isDarkMode: false
-        property bool showTeamBuilder: false
 
         color: isDarkMode ? "#181818" : Kirigami.Theme.backgroundColor
         radius: Kirigami.Units.largeSpacing
@@ -66,125 +64,9 @@ PlasmoidItem {
         property var availableGenerations: []
         property var learnableMoves: []
 
-        // Team Builder state (Limit 6 Pokémon)
-        property var savedTeams: []
-        property var currentTeamMoves: []
-
         Component.onCompleted: {
             loadPokemon("charmander")
             loadSpeciesNames()
-            initDatabase()
-        }
-
-        function getDatabase() {
-            return LocalStorage.openDatabaseSync("PlasmaDexDB", "1.0", "Saved Pokemon Teams", 1000000)
-        }
-
-        function initDatabase() {
-            try {
-                const db = getDatabase()
-                db.transaction(function(tx) {
-                    tx.executeSql('CREATE TABLE IF NOT EXISTS teams (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, generation TEXT, pokemon TEXT, moves TEXT);')
-                })
-                loadSavedTeams()
-            } catch (err) {
-                console.log("DB Init Error: " + err)
-            }
-        }
-
-        function loadSavedTeams() {
-            try {
-                const db = getDatabase()
-                db.transaction(function(tx) {
-                    const rs = tx.executeSql('SELECT * FROM teams;')
-                    let items = []
-                    for (let i = 0; i < rs.rows.length; i++) {
-                        items.push({
-                            id: rs.rows.item(i).id,
-                            name: rs.rows.item(i).name,
-                            generation: rs.rows.item(i).generation,
-                            pokemon: rs.rows.item(i).pokemon,
-                            moves: JSON.parse(rs.rows.item(i).moves || "[]")
-                        })
-                    }
-                    savedTeams = items
-                })
-            } catch (err) {
-                console.log("Load Teams Error: " + err)
-            }
-        }
-
-        function saveCurrentTeamToDb(teamName) {
-            if (!pokemonName) return
-            if (savedTeams.length >= 6) {
-                errorText = "Team is full! Maximum 6 Pokémon allowed."
-                return
-            }
-            try {
-                const db = getDatabase()
-                db.transaction(function(tx) {
-                    tx.executeSql('INSERT INTO teams (name, generation, pokemon, moves) VALUES (?, ?, ?, ?);',
-                        [teamName || ("Team - " + pokemonName), selectedGeneration, pokemonName, JSON.stringify(currentTeamMoves)])
-                })
-                loadSavedTeams()
-                errorText = ""
-                statusText = "Saved " + pokemonName + " to team! (" + savedTeams.length + "/6)"
-            } catch (err) {
-                errorText = "Could not save team."
-            }
-        }
-
-        function deleteTeamFromDb(teamId) {
-            try {
-                const db = getDatabase()
-                db.transaction(function(tx) {
-                    tx.executeSql('DELETE FROM teams WHERE id = ?;', [teamId])
-                })
-                loadSavedTeams()
-                statusText = "Removed Pokémon from team."
-            } catch (err) {}
-        }
-
-        function addMoveToTeam(moveObj) {
-            if (currentTeamMoves.length >= 4) return
-            
-            // Check if move is already added
-            for (let i = 0; i < currentTeamMoves.length; ++i) {
-                if (currentTeamMoves[i].name === moveObj.name) return
-            }
-
-            // Fetch move stats (Power & Accuracy) from PokéAPI
-            const queryName = moveObj.name.toLowerCase().replace(/\s+/g, "-")
-            const mxhr = new XMLHttpRequest()
-            mxhr.open("GET", "https://pokeapi.co/api/v2/move/" + queryName)
-            mxhr.setRequestHeader("Accept", "application/json")
-            mxhr.onreadystatechange = function () {
-                if (mxhr.readyState !== XMLHttpRequest.DONE) return
-                let pwr = "-"
-                let acc = "-"
-                if (mxhr.status >= 200 && mxhr.status < 300) {
-                    try {
-                        let data = JSON.parse(mxhr.responseText)
-                        if (data.power !== null && data.power !== undefined) pwr = data.power
-                        if (data.accuracy !== null && data.accuracy !== undefined) acc = data.accuracy + "%"
-                    } catch (e) {}
-                }
-
-                currentTeamMoves.push({
-                    name: moveObj.name,
-                    power: pwr,
-                    accuracy: acc,
-                    bgColor: moveObj.bgColor,
-                    classLabel: moveObj.classLabel
-                })
-                currentTeamMoves = currentTeamMoves.slice() // trigger binding refresh
-            }
-            mxhr.send()
-        }
-
-        function removeMoveFromTeam(index) {
-            currentTeamMoves.splice(index, 1)
-            currentTeamMoves = currentTeamMoves.slice()
         }
 
         function selectGeneration(genName) {
@@ -408,7 +290,6 @@ PlasmoidItem {
             animatedUrl = ""
             animatedShinyUrl = ""
             flavorText = ""
-            currentTeamMoves = []
             
             categorizedMoves = {}
             selectedGeneration = ""
@@ -708,17 +589,6 @@ PlasmoidItem {
 
                     RowLayout {
                         Layout.fillWidth: true
-
-                        ToolButton {
-                            icon.name: "application-menu"
-                            display: AbstractButton.IconOnly
-                            Accessible.name: "Team Builder Menu"
-                            ToolTip.text: "Manage Teams & Moves (Max 6)"
-                            implicitWidth: 28
-                            implicitHeight: 28
-                            onClicked: popup.showTeamBuilder = !popup.showTeamBuilder
-                        }
-
                         Kirigami.Heading {
                             text: "PlasmaDex"
                             level: 2
@@ -889,137 +759,6 @@ PlasmoidItem {
                 ColumnLayout {
                     anchors.fill: parent
                     anchors.margins: Kirigami.Units.smallSpacing
-
-                    // TEAM BUILDER OVERLAY PANEL (Max 6 Pokémon & Move Stats)
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: popup.showTeamBuilder ? implicitHeight : 0
-                        visible: popup.showTeamBuilder
-                        spacing: 6
-                        clip: true
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Kirigami.Heading {
-                                text: "Team Builder (Max 6)"
-                                level: 3
-                                color: popup.isDarkMode ? "#ffffff" : "#171717"
-                                Layout.fillWidth: true
-                            }
-                            Label {
-                                text: popup.savedTeams.length + "/6 slots"
-                                color: popup.savedTeams.length >= 6 ? "#e53935" : (popup.isDarkMode ? "#aaaaaa" : "#555555")
-                                font.bold: true
-                            }
-                        }
-
-                        Label {
-                            text: "Active: " + popup.pokemonName + " (" + popup.selectedGeneration + ")"
-                            color: popup.isDarkMode ? "#aaaaaa" : "#555555"
-                            font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                        }
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Label {
-                                text: "Selected Moves (" + popup.currentTeamMoves.length + "/4):"
-                                color: popup.isDarkMode ? "#ffffff" : "#171717"
-                                font.bold: true
-                                font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                            }
-                        }
-
-                        // Selected moves with Power & Accuracy display
-                        ListView {
-                            id: teamMovesList
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: Math.min(popup.currentTeamMoves.length * 30, 120)
-                            clip: true
-                            model: popup.currentTeamMoves
-                            delegate: Rectangle {
-                                required property var modelData
-                                required property int index
-                                width: teamMovesList.width
-                                height: 26
-                                color: modelData.bgColor || "#78a9e6"
-                                radius: 4
-
-                                RowLayout {
-                                    anchors.fill: parent
-                                    anchors.leftMargin: 6
-                                    anchors.rightMargin: 6
-                                    Label {
-                                        Layout.fillWidth: true
-                                        text: modelData.name + " (Pwr: " + modelData.power + " | Acc: " + modelData.accuracy + ")"
-                                        color: "#171717"
-                                        font.bold: true
-                                        font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                        elide: Text.ElideRight
-                                    }
-                                    Button {
-                                        text: "✕"
-                                        implicitWidth: 24
-                                        implicitHeight: 20
-                                        onClicked: popup.removeMoveFromTeam(index)
-                                    }
-                                }
-                            }
-                        }
-
-                        Button {
-                            text: popup.savedTeams.length >= 6 ? "Team Full (6/6)" : "Save " + popup.pokemonName + " to Team"
-                            enabled: popup.savedTeams.length < 6
-                            Layout.fillWidth: true
-                            onClicked: popup.saveCurrentTeamToDb("Team Member - " + popup.pokemonName)
-                        }
-
-                        Kirigami.Heading {
-                            text: "Roster (" + popup.savedTeams.length + "/6)"
-                            level: 4
-                            color: popup.isDarkMode ? "#ffffff" : "#171717"
-                        }
-
-                        ListView {
-                            id: savedTeamsList
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: Math.min(popup.savedTeams.length * 36, 110)
-                            clip: true
-                            model: popup.savedTeams
-                            delegate: Rectangle {
-                                required property var modelData
-                                width: savedTeamsList.width
-                                height: 32
-                                color: popup.isDarkMode ? "#252525" : "#f0f0f0"
-                                radius: 4
-
-                                RowLayout {
-                                    anchors.fill: parent
-                                    anchors.margins: 4
-                                    Label {
-                                        Layout.fillWidth: true
-                                        text: modelData.name + " [" + modelData.generation + "]"
-                                        color: popup.isDarkMode ? "#ffffff" : "#171717"
-                                        font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                        elide: Text.ElideRight
-                                    }
-                                    Button {
-                                        text: "Load"
-                                        implicitWidth: 45
-                                        implicitHeight: 24
-                                        onClicked: popup.loadPokemon(modelData.pokemon)
-                                    }
-                                    Button {
-                                        text: "Del"
-                                        implicitWidth: 40
-                                        implicitHeight: 24
-                                        onClicked: popup.deleteTeamFromDb(modelData.id)
-                                    }
-                                }
-                            }
-                        }
-
-                        Kirigami.Separator { Layout.fillWidth: true }
-                    }
 
                     ScrollView {
                         id: bodyScroll
@@ -1423,7 +1162,7 @@ PlasmoidItem {
                             }
                             
                             Kirigami.Heading {
-                                text: "Moves (Click to add to team)"
+                                text: "Moves"
                                 level: 2
                                 color: popup.isDarkMode ? "#ffffff" : "#171717"
                             }
@@ -1489,11 +1228,9 @@ PlasmoidItem {
                                         MouseArea {
                                             anchors.fill: parent
                                             hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
                                             ToolTip.visible: containsMouse
                                             ToolTip.delay: 200
-                                            ToolTip.text: "Click to add " + modelData.name + " to team"
-                                            onClicked: popup.addMoveToTeam(modelData)
+                                            ToolTip.text: modelData.classLabel + " · " + modelData.method
                                         }
                                     }
                                 }
