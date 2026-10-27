@@ -166,36 +166,18 @@ PlasmoidItem {
             statusText = "Removed Pokémon from party."
         }
 
-        function addMoveToSelected(moveName) {
+        function addMoveToSelected(moveObj) {
             if (selectedPokemonMoves.length >= 4) return
             for (let i = 0; i < selectedPokemonMoves.length; ++i) {
-                if (selectedPokemonMoves[i].name === moveName) return
+                if (selectedPokemonMoves[i].name === moveObj.name) return
             }
 
-            const queryName = moveName.toLowerCase().replace(/\s+/g, "-")
-            const mxhr = new XMLHttpRequest()
-            mxhr.open("GET", "https://pokeapi.co/api/v2/move/" + queryName)
-            mxhr.setRequestHeader("Accept", "application/json")
-            mxhr.onreadystatechange = function () {
-                if (mxhr.readyState !== XMLHttpRequest.DONE) return
-                let pwr = "-"
-                let acc = "-"
-                if (mxhr.status >= 200 && mxhr.status < 300) {
-                    try {
-                        let data = JSON.parse(mxhr.responseText)
-                        if (data.power !== null && data.power !== undefined) pwr = data.power
-                        if (data.accuracy !== null && data.accuracy !== undefined) acc = data.accuracy + "%"
-                    } catch (e) {}
-                }
-
-                selectedPokemonMoves.push({
-                    name: moveName,
-                    power: pwr,
-                    accuracy: acc
-                })
-                selectedPokemonMoves = selectedPokemonMoves.slice()
-            }
-            mxhr.send()
+            selectedPokemonMoves.push({
+                name: moveObj.name,
+                power: moveObj.power,
+                accuracy: moveObj.accuracy
+            })
+            selectedPokemonMoves = selectedPokemonMoves.slice()
         }
 
         function removeMoveFromSelected(index) {
@@ -515,9 +497,25 @@ PlasmoidItem {
                                     if (mxhr.readyState !== XMLHttpRequest.DONE) return
                                     let classColor = "#a8a878"
                                     let classType = "Status"
+                                    let pwr = "-"
+                                    let acc = "-"
+                                    let desc = "No description available."
+
                                     if (mxhr.status >= 200 && mxhr.status < 300) {
                                         try {
                                             let moveDetails = JSON.parse(mxhr.responseText)
+                                            if (moveDetails.power !== null && moveDetails.power !== undefined) pwr = moveDetails.power
+                                            if (moveDetails.accuracy !== null && moveDetails.accuracy !== undefined) acc = moveDetails.accuracy + "%"
+                                            
+                                            if (moveDetails.flavor_text_entries) {
+                                                for (let f = 0; f < moveDetails.flavor_text_entries.length; ++f) {
+                                                    if (moveDetails.flavor_text_entries[f].language.name === "en") {
+                                                        desc = moveDetails.flavor_text_entries[f].flavor_text.replace(/[\n\f\r]/g, " ")
+                                                        break
+                                                    }
+                                                }
+                                            }
+
                                             if (moveDetails.damage_class) {
                                                 let className = moveDetails.damage_class.name
                                                 if (className === "physical") {
@@ -541,6 +539,9 @@ PlasmoidItem {
                                         displayText: formattedDisplay,
                                         method: titleCase(learnMethod.replace(/-/g, " ")),
                                         level: lvl,
+                                        power: pwr,
+                                        accuracy: acc,
+                                        description: desc,
                                         bgColor: classColor,
                                         classLabel: classType
                                     })
@@ -1381,8 +1382,10 @@ PlasmoidItem {
                                             cursorShape: Qt.PointingHandCursor
                                             ToolTip.visible: containsMouse
                                             ToolTip.delay: 200
-                                            ToolTip.text: "Click to add " + modelData.name + " to team"
-                                            onClicked: popup.addMoveToSelected(modelData.name)
+                                            ToolTip.text: modelData.classLabel + " · " + modelData.method + 
+                                                          "\nPower: " + modelData.power + " | Accuracy: " + modelData.accuracy + 
+                                                          "\n" + modelData.description
+                                            onClicked: popup.addMoveToSelected(modelData)
                                         }
                                     }
                                 }
