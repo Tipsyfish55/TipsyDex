@@ -53,6 +53,7 @@ PlasmoidItem {
         property bool searchEdited: false
         property int totalEvYield: 0
         property int lookupId: 0
+        property var learnableMoves: []
 
         Component.onCompleted: {
             loadPokemon("pikachu")
@@ -264,6 +265,7 @@ PlasmoidItem {
             spriteUrl = ""
             shinyUrl = ""
             flavorText = ""
+            learnableMoves = []
 
             requestJson("https://pokeapi.co/api/v2/pokemon/" + encodeURIComponent(normalized), requestId, function (pokemon) {
                 pokemonName = titleCase(pokemon.name)
@@ -286,6 +288,24 @@ PlasmoidItem {
                     evTotal += stats[i].ev
                 }
                 totalEvYield = evTotal
+                
+                learnableMoves = pokemon.moves.map(function (entry) {
+                    let versionSet = {}
+                    for (let v = 0; v < entry.version_group_details.length; ++v) {
+                        versionSet[titleCase(entry.version_group_details[v].version_group.name)] = true
+                    }
+                    let versions = Object.keys(versionSet)
+                    
+                    let isCommon = versions.length >= 10 
+                    
+                    return {
+                        name: titleCase(entry.move.name),
+                        versionsList: versions.join(", "),
+                        bgColor: isCommon ? "#d4edda" : "#fff3cd",
+                        borderColor: isCommon ? "#c3e6cb" : "#ffeeba"
+                    }
+                })
+
                 const speciesName = pokemon.species.name
                 const fileName = speciesName
                 spriteUrl = "https://img.pokemondb.net/sprites/home/normal/" + fileName + ".png"
@@ -654,308 +674,354 @@ PlasmoidItem {
                             }
 
                             ColumnLayout {
-                        visible: popup.typeDefenses.length > 0
-                        Layout.fillWidth: true
-                        spacing: Kirigami.Units.smallSpacing
-
-                        Kirigami.Heading {
-                            text: "Type defenses"
-                            level: 3
-                            color: "#171717"
-                        }
-
-                        Flow {
-                            Layout.fillWidth: true
-                            spacing: Kirigami.Units.smallSpacing
-                            Repeater {
-                                model: popup.typeDefenses
-                                delegate: Rectangle {
-                                    required property var modelData
-                                    readonly property string multiplierText: modelData.multiplier === 0
-                                        ? "0×" : modelData.multiplier + "×"
-                                    radius: 5
-                                    height: defenseLabel.implicitHeight + 6
-                                    width: defenseLabel.implicitWidth + 12
-                                    color: modelData.color
-                                    border.color: "#222222"
-                                    border.width: 1
-
-                                    Label {
-                                        id: defenseLabel
-                                        anchors.centerIn: parent
-                                        text: parent.multiplierText + " " + modelData.name
-                                        color: modelData.textColor
-                                        font.bold: true
-                                        font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                    }
-                                }
-                            }
-                        }
-                        Label {
-                            text: "Damage taken; neutral types omitted."
-                            color: "#555555"
-                            font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                        }
-                    }
-
-                    Label {
-                        visible: popup.flavorText.length > 0
-                        text: popup.flavorText
-                        Layout.fillWidth: true
-                        wrapMode: Text.Wrap
-                        maximumLineCount: 2
-                        elide: Text.ElideRight
-                        color: "#171717"
-                    }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Label {
-                            text: popup.heightText
-                            Layout.fillWidth: true
-                            color: "#171717"
-                        }
-                        Label {
-                            text: popup.weightText
-                            color: "#555555"
-                        }
-                    }
-
-                    Kirigami.Separator {
-                        Layout.fillWidth: true
-                    }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Kirigami.Heading {
-                            text: "Stats"
-                            level: 2
-                            Layout.fillWidth: true
-                            color: "#171717"
-                        }
-                        Label {
-                            text: "EV yield " + popup.totalEvYield
-                            color: "#555555"
-                        }
-                    }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: Kirigami.Units.smallSpacing
-                        Label {
-                            text: ""
-                            Layout.preferredWidth: 36
-                        }
-                        Label {
-                            text: "BASE"
-                            Layout.fillWidth: true
-                            font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                            color: "#555555"
-                        }
-                        Label {
-                            text: "EV"
-                            Layout.preferredWidth: 32
-                            font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                            color: "#555555"
-                        }
-                        Label {
-                            text: "IV"
-                            Layout.preferredWidth: 38
-                            font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                            color: "#555555"
-                        }
-                    }
-
-                    Repeater {
-                        model: popup.stats
-                        delegate: RowLayout {
-                            required property var modelData
-                            Layout.fillWidth: true
-                            spacing: Kirigami.Units.smallSpacing
-
-                            Label {
-                                text: modelData.name
-                                Layout.preferredWidth: 36
-                                font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                color: "#171717"
-                            }
-                            Item {
+                                visible: popup.typeDefenses.length > 0
                                 Layout.fillWidth: true
-                                implicitHeight: 20
-                                Rectangle {
-                                    anchors.fill: parent
-                                    radius: height / 2
-                                    color: "#e5e5e5"
-                                }
-                                Rectangle {
-                                    width: parent.width * modelData.base / 255
-                                    height: parent.height
-                                    radius: height / 2
-                                    color: "#78a9e6"
-                                    opacity: 0.8
-                                }
-                                Label {
-                                    anchors.fill: parent
-                                    text: modelData.base
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
-                                    font.bold: true
-                                    font.pixelSize: Kirigami.Theme.smallFont.pixelSize
+                                spacing: Kirigami.Units.smallSpacing
+
+                                Kirigami.Heading {
+                                    text: "Type defenses"
+                                    level: 3
                                     color: "#171717"
                                 }
-                            }
-                            Item {
-                                Layout.preferredWidth: 32
-                                implicitHeight: 20
-                                Rectangle {
-                                    anchors.fill: parent
-                                    radius: height / 2
-                                    color: "#e5e5e5"
-                                }
-                                Rectangle {
-                                    width: modelData.ev ? Math.max(parent.width * modelData.ev / 3, 14) : 0
-                                    height: parent.height
-                                    radius: height / 2
-                                    color: "#a6ce83"
-                                    opacity: 0.8
-                                }
-                                Label {
-                                    anchors.fill: parent
-                                    text: "+" + modelData.ev
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
-                                    font.bold: true
-                                    font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                    color: "#171717"
-                                }
-                            }
-                            Item {
-                                Layout.preferredWidth: 38
-                                implicitHeight: 20
-                                Rectangle {
-                                    anchors.fill: parent
-                                    radius: height / 2
-                                    color: "#e5e5e5"
-                                }
-                                Rectangle {
-                                    anchors.fill: parent
-                                    radius: height / 2
-                                    color: "#c5a5d8"
-                                }
-                                Label {
-                                    anchors.fill: parent
-                                    text: "0–31"
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
-                                    font.bold: true
-                                    font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                    color: "#171717"
-                                }
-                            }
-                        }
-                    }
 
-                    Label {
-                        text: "EV is gained by defeating this Pokémon. IVs are individual values: each stat can range from 0 to 31."
-                        Layout.fillWidth: true
-                        wrapMode: Text.Wrap
-                        color: "#555555"
-                        font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                    }
+                                Flow {
+                                    Layout.fillWidth: true
+                                    spacing: Kirigami.Units.smallSpacing
+                                    Repeater {
+                                        model: popup.typeDefenses
+                                        delegate: Rectangle {
+                                            required property var modelData
+                                            readonly property string multiplierText: modelData.multiplier === 0
+                                                ? "0×" : modelData.multiplier + "×"
+                                            radius: 5
+                                            height: defenseLabel.implicitHeight + 6
+                                            width: defenseLabel.implicitWidth + 12
+                                            color: modelData.color
+                                            border.color: "#222222"
+                                            border.width: 1
 
-                    Kirigami.Separator {
-                        Layout.fillWidth: true
-                        color: "#777777"
-                    }
-
-                    Kirigami.Heading {
-                        text: "Evolution"
-                        level: 2
-                        color: "#171717"
-                    }
-
-                    Repeater {
-                        model: popup.evolutionPaths(popup.evolutionRoot, [], [])
-                        delegate: Flow {
-                            required property var modelData
-                            Layout.fillWidth: true
-                            spacing: Kirigami.Units.smallSpacing
-                            Repeater {
-                                model: parent.modelData
-                                delegate: Row {
-                                    required property int index
-                                    required property var modelData
-                                    spacing: 2
-
-                                    Row {
-                                        visible: index > 0
-                                        spacing: 2
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        Label {
-                                            text: "-"
-                                            color: "#555555"
-                                            anchors.verticalCenter: parent.verticalCenter
-                                        }
-                                        Image {
-                                            visible: modelData.requirements.length > 0
-                                                && (modelData.requirements[0].item.length > 0
-                                                    || modelData.requirements[0].heldItem.length > 0)
-                                            source: visible
-                                                ? "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/"
-                                                    + (modelData.requirements[0].item || modelData.requirements[0].heldItem) + ".png"
-                                                : ""
-                                            sourceSize.width: 18
-                                            sourceSize.height: 18
-                                            width: visible ? 18 : 0
-                                            height: visible ? 18 : 0
-                                            fillMode: Image.PreserveAspectFit
-                                            asynchronous: true
-                                            cache: true
-                                        }
-                                        Label {
-                                            text: popup.shortRequirement(modelData.requirements)
-                                            width: Math.min(implicitWidth, 46)
-                                            elide: Text.ElideRight
-                                            color: "#555555"
-                                            font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                            anchors.verticalCenter: parent.verticalCenter
-                                        }
-                                    }
-
-                                    Column {
-                                        width: 56
-                                        spacing: 0
-                                        Image {
-                                            anchors.horizontalCenter: parent.horizontalCenter
-                                            width: 44
-                                            height: 44
-                                            source: modelData.spriteUrl
-                                            fillMode: Image.PreserveAspectFit
-                                            asynchronous: true
-                                            cache: true
-                                            onStatusChanged: {
-                                                if (status === Image.Error)
-                                                    source = modelData.fallbackSpriteUrl
+                                            Label {
+                                                id: defenseLabel
+                                                anchors.centerIn: parent
+                                                text: parent.multiplierText + " " + modelData.name
+                                                color: modelData.textColor
+                                                font.bold: true
+                                                font.pixelSize: Kirigami.Theme.smallFont.pixelSize
                                             }
                                         }
+                                    }
+                                }
+                                Label {
+                                    text: "Damage taken; neutral types omitted."
+                                    color: "#555555"
+                                    font.pixelSize: Kirigami.Theme.smallFont.pixelSize
+                                }
+                            }
+
+                            Label {
+                                visible: popup.flavorText.length > 0
+                                text: popup.flavorText
+                                Layout.fillWidth: true
+                                wrapMode: Text.Wrap
+                                maximumLineCount: 2
+                                elide: Text.ElideRight
+                                color: "#171717"
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Label {
+                                    text: popup.heightText
+                                    Layout.fillWidth: true
+                                    color: "#171717"
+                                }
+                                Label {
+                                    text: popup.weightText
+                                    color: "#555555"
+                                }
+                            }
+
+                            Kirigami.Separator {
+                                Layout.fillWidth: true
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Kirigami.Heading {
+                                    text: "Stats"
+                                    level: 2
+                                    Layout.fillWidth: true
+                                    color: "#171717"
+                                }
+                                Label {
+                                    text: "EV yield " + popup.totalEvYield
+                                    color: "#555555"
+                                }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: Kirigami.Units.smallSpacing
+                                Label {
+                                    text: ""
+                                    Layout.preferredWidth: 36
+                                }
+                                Label {
+                                    text: "BASE"
+                                    Layout.fillWidth: true
+                                    font.pixelSize: Kirigami.Theme.smallFont.pixelSize
+                                    color: "#555555"
+                                }
+                                Label {
+                                    text: "EV"
+                                    Layout.preferredWidth: 32
+                                    font.pixelSize: Kirigami.Theme.smallFont.pixelSize
+                                    color: "#555555"
+                                }
+                                Label {
+                                    text: "IV"
+                                    Layout.preferredWidth: 38
+                                    font.pixelSize: Kirigami.Theme.smallFont.pixelSize
+                                    color: "#555555"
+                                }
+                            }
+
+                            Repeater {
+                                model: popup.stats
+                                delegate: RowLayout {
+                                    required property var modelData
+                                    Layout.fillWidth: true
+                                    spacing: Kirigami.Units.smallSpacing
+
+                                    Label {
+                                        text: modelData.name
+                                        Layout.preferredWidth: 36
+                                        font.pixelSize: Kirigami.Theme.smallFont.pixelSize
+                                        color: "#171717"
+                                    }
+                                    Item {
+                                        Layout.fillWidth: true
+                                        implicitHeight: 20
+                                        Rectangle {
+                                            anchors.fill: parent
+                                            radius: height / 2
+                                            color: "#e5e5e5"
+                                        }
+                                        Rectangle {
+                                            width: parent.width * modelData.base / 255
+                                            height: parent.height
+                                            radius: height / 2
+                                            color: "#78a9e6"
+                                            opacity: 0.8
+                                        }
                                         Label {
-                                            width: parent.width
-                                            text: popup.titleCase(modelData.name)
+                                            anchors.fill: parent
+                                            text: modelData.base
                                             horizontalAlignment: Text.AlignHCenter
+                                            verticalAlignment: Text.AlignVCenter
+                                            font.bold: true
                                             font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                            font.bold: modelData.name === popup.pokemonName.toLowerCase()
-                                            elide: Text.ElideRight
+                                            color: "#171717"
+                                        }
+                                    }
+                                    Item {
+                                        Layout.preferredWidth: 32
+                                        implicitHeight: 20
+                                        Rectangle {
+                                            anchors.fill: parent
+                                            radius: height / 2
+                                            color: "#e5e5e5"
+                                        }
+                                        Rectangle {
+                                            width: modelData.ev ? Math.max(parent.width * modelData.ev / 3, 14) : 0
+                                            height: parent.height
+                                            radius: height / 2
+                                            color: "#a6ce83"
+                                            opacity: 0.8
+                                        }
+                                        Label {
+                                            anchors.fill: parent
+                                            text: "+" + modelData.ev
+                                            horizontalAlignment: Text.AlignHCenter
+                                            verticalAlignment: Text.AlignVCenter
+                                            font.bold: true
+                                            font.pixelSize: Kirigami.Theme.smallFont.pixelSize
+                                            color: "#171717"
+                                        }
+                                    }
+                                    Item {
+                                        Layout.preferredWidth: 38
+                                        implicitHeight: 20
+                                        Rectangle {
+                                            anchors.fill: parent
+                                            radius: height / 2
+                                            color: "#e5e5e5"
+                                        }
+                                        Rectangle {
+                                            anchors.fill: parent
+                                            radius: height / 2
+                                            color: "#c5a5d8"
+                                        }
+                                        Label {
+                                            anchors.fill: parent
+                                            text: "0–31"
+                                            horizontalAlignment: Text.AlignHCenter
+                                            verticalAlignment: Text.AlignVCenter
+                                            font.bold: true
+                                            font.pixelSize: Kirigami.Theme.smallFont.pixelSize
                                             color: "#171717"
                                         }
                                     }
                                 }
                             }
+
+                            Label {
+                                text: "EV is gained by defeating this Pokémon. IVs are individual values: each stat can range from 0 to 31."
+                                Layout.fillWidth: true
+                                wrapMode: Text.Wrap
+                                color: "#555555"
+                                font.pixelSize: Kirigami.Theme.smallFont.pixelSize
+                            }
+
+                            Kirigami.Separator {
+                                Layout.fillWidth: true
+                                color: "#777777"
+                            }
+
+                            Kirigami.Heading {
+                                text: "Evolution"
+                                level: 2
+                                color: "#171717"
+                            }
+
+                            Repeater {
+                                model: popup.evolutionPaths(popup.evolutionRoot, [], [])
+                                delegate: Flow {
+                                    required property var modelData
+                                    Layout.fillWidth: true
+                                    spacing: Kirigami.Units.smallSpacing
+                                    Repeater {
+                                        model: parent.modelData
+                                        delegate: Row {
+                                            required property int index
+                                            required property var modelData
+                                            spacing: 2
+
+                                            Row {
+                                                visible: index > 0
+                                                spacing: 2
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                Label {
+                                                    text: "-"
+                                                    color: "#555555"
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                }
+                                                Image {
+                                                    visible: modelData.requirements.length > 0
+                                                        && (modelData.requirements[0].item.length > 0
+                                                            || modelData.requirements[0].heldItem.length > 0)
+                                                    source: visible
+                                                        ? "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/"
+                                                            + (modelData.requirements[0].item || modelData.requirements[0].heldItem) + ".png"
+                                                        : ""
+                                                    sourceSize.width: 18
+                                                    sourceSize.height: 18
+                                                    width: visible ? 18 : 0
+                                                    height: visible ? 18 : 0
+                                                    fillMode: Image.PreserveAspectFit
+                                                    asynchronous: true
+                                                    cache: true
+                                                }
+                                                Label {
+                                                    text: popup.shortRequirement(modelData.requirements)
+                                                    width: Math.min(implicitWidth, 46)
+                                                    elide: Text.ElideRight
+                                                    color: "#555555"
+                                                    font.pixelSize: Kirigami.Theme.smallFont.pixelSize
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                }
+                                            }
+
+                                            Column {
+                                                width: 56
+                                                spacing: 0
+                                                Image {
+                                                    anchors.horizontalCenter: parent.horizontalCenter
+                                                    width: 44
+                                                    height: 44
+                                                    source: modelData.spriteUrl
+                                                    fillMode: Image.PreserveAspectFit
+                                                    asynchronous: true
+                                                    cache: true
+                                                    onStatusChanged: {
+                                                        if (status === Image.Error)
+                                                            source = modelData.fallbackSpriteUrl
+                                                    }
+                                                }
+                                                Label {
+                                                    width: parent.width
+                                                    text: popup.titleCase(modelData.name)
+                                                    horizontalAlignment: Text.AlignHCenter
+                                                    font.pixelSize: Kirigami.Theme.smallFont.pixelSize
+                                                    font.bold: modelData.name === popup.pokemonName.toLowerCase()
+                                                    elide: Text.ElideRight
+                                                    color: "#171717"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Kirigami.Separator {
+                                Layout.fillWidth: true
+                                color: "#777777"
+                            }
+
+                            Kirigami.Heading {
+                                text: "Moves"
+                                level: 2
+                                color: "#171717"
+                            }
+
+                            Flow {
+                                Layout.fillWidth: true
+                                spacing: Kirigami.Units.smallSpacing
+                                
+                                Repeater {
+                                    model: popup.learnableMoves
+                                    delegate: Rectangle {
+                                        required property var modelData
+                                        radius: 4
+                                        height: moveLabel.implicitHeight + 8
+                                        width: moveLabel.implicitWidth + 12
+                                        color: modelData.bgColor
+                                        border.color: modelData.borderColor
+                                        border.width: 1
+
+                                        Label {
+                                            id: moveLabel
+                                            anchors.centerIn: parent
+                                            text: modelData.name
+                                            color: "#171717"
+                                            font.pixelSize: Kirigami.Theme.smallFont.pixelSize
+                                        }
+
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            ToolTip.visible: containsMouse
+                                            ToolTip.delay: 200
+                                            ToolTip.text: "Generations/Games:\n" + modelData.versionsList
+                                        }
+                                    }
+                                }
+                            }
+
                         }
                     }
                 }
             }
         }
-    }
-}
     }
 }
