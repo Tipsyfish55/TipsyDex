@@ -108,23 +108,21 @@ PlasmoidItem {
                 "flying", "psychic", "bug", "rock", "ghost", "dragon", "dark", "steel", "fairy"
             ]
 
-            // We will fetch type damage relations asynchronously or use cached data if available.
-            // For a robust implementation, we query PokéAPI for each member's types.
-            let weaknessCounts = {}
+            let weaknessMap = {}
             for (let t = 0; t < allTypes.length; ++t) {
-                weaknessCounts[allTypes[t]] = 0
+                weaknessMap[allTypes[t]] = []
             }
 
             let membersProcessed = 0
             for (let i = 0; i < currentTeam.length; ++i) {
-                const memberTypes = currentTeam[i].types || []
+                const member = currentTeam[i]
+                const memberTypes = member.types || []
                 if (memberTypes.length === 0) {
                     membersProcessed++
-                    if (membersProcessed === currentTeam.length) finalizeWeaknesses(weaknessCounts)
+                    if (membersProcessed === currentTeam.length) finalizeWeaknesses(weaknessMap)
                     continue
                 }
 
-                // Query type effectiveness for this member
                 let memberMults = {}
                 for (let t = 0; t < allTypes.length; ++t) memberMults[allTypes[t]] = 1
 
@@ -157,15 +155,15 @@ PlasmoidItem {
                         }
                         typesRemaining--
                         if (typesRemaining === 0) {
-                            // Tally weaknesses (> 1x) for this member
                             for (let t = 0; t < allTypes.length; ++t) {
                                 if (memberMults[allTypes[t]] > 1) {
-                                    weaknessCounts[allTypes[t]] = (weaknessCounts[allTypes[t]] || 0) + 1
+                                    if (!weaknessMap[allTypes[t]]) weaknessMap[allTypes[t]] = []
+                                    weaknessMap[allTypes[t]].push(member.name + " (" + memberMults[allTypes[t]] + "×)")
                                 }
                             }
                             membersProcessed++
                             if (membersProcessed === currentTeam.length) {
-                                finalizeWeaknesses(weaknessCounts)
+                                finalizeWeaknesses(weaknessMap)
                             }
                         }
                     }
@@ -174,13 +172,14 @@ PlasmoidItem {
             }
         }
 
-        function finalizeWeaknesses(counts) {
+        function finalizeWeaknesses(map) {
             let res = []
-            for (let type in counts) {
-                if (counts[type] > 0) {
+            for (let type in map) {
+                if (map[type].length > 0) {
                     res.push({
                         name: titleCase(type),
-                        count: counts[type],
+                        count: map[type].length,
+                        pokemonList: map[type].join(", "),
                         color: typeColor(type),
                         textColor: typeTextColor(type)
                     })
@@ -1870,6 +1869,15 @@ PlasmoidItem {
                                                 color: modelData.textColor
                                                 font.bold: true
                                                 font.pixelSize: 10
+                                            }
+
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
+                                                ToolTip.visible: containsMouse
+                                                ToolTip.delay: 200
+                                                ToolTip.text: "Vulnerable Pokémon:\n" + modelData.pokemonList
                                             }
                                         }
                                     }
