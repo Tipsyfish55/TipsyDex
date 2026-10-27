@@ -1,4 +1,4 @@
-This is a forked project of the PlasmaDex widget.
+This is a forked project of the PlasmaDex widget. Also vibe coded like the OG. We work hard okay!
 
 
 
