@@ -407,7 +407,7 @@ PlasmoidItem {
 
                                     pendingMovesCount--
                                     if (pendingMovesCount === 0) {
-                                        finalizeMovesSorting()
+                                        finalizeAndSortAllGenerations()
                                     }
                                 }
                                 mxhr.send()
@@ -417,10 +417,10 @@ PlasmoidItem {
                 }
 
                 if (pendingMovesCount === 0) {
-                    finalizeMovesSorting()
+                    finalizeAndSortAllGenerations()
                 }
 
-                function finalizeMovesSorting() {
+                function finalizeAndSortAllGenerations() {
                     let gens = []
                     for (let i = 1; i <= 9; ++i) {
                         let g = "Gen " + i
