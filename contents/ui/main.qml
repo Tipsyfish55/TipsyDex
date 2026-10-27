@@ -1072,7 +1072,7 @@ PlasmoidItem {
                             }
 
                             Kirigami.Heading {
-                                text: "Evolution"
+                                text: "Evolution (Click to load)"
                                 level: 2
                                 color: popup.isDarkMode ? "#ffffff" : "#171717"
                             }
@@ -1129,6 +1129,7 @@ PlasmoidItem {
                                                 width: 56
                                                 spacing: 0
                                                 Image {
+                                                    id: evoImg
                                                     anchors.horizontalCenter: parent.horizontalCenter
                                                     width: 44
                                                     height: 44
@@ -1149,6 +1150,15 @@ PlasmoidItem {
                                                     font.bold: modelData.name === popup.pokemonName.toLowerCase()
                                                     elide: Text.ElideRight
                                                     color: popup.isDarkMode ? "#ffffff" : "#171717"
+                                                }
+
+                                                MouseArea {
+                                                    anchors.fill: parent
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    ToolTip.visible: containsMouse
+                                                    ToolTip.delay: 200
+                                                    ToolTip.text: "Load " + popup.titleCase(modelData.name)
+                                                    onClicked: popup.loadPokemon(modelData.name)
                                                 }
                                             }
                                         }
