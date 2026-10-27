@@ -79,6 +79,7 @@ PlasmoidItem {
         // Item Database & Search State
         property var itemNames: []
         property var itemSuggestions: []
+        property string suggestionError: ""
 
         Component.onCompleted: {
             initTeamDatabase()
@@ -132,6 +133,21 @@ PlasmoidItem {
             }).slice(0, 5)
         }
 
+        function updateSuggestions(input) {
+            if (!searchEdited) {
+                searchSuggestions = []
+                return
+            }
+            const query = input.trim().toLowerCase().replace(/\s+/g, "-")
+            if (query.length < 2) {
+                searchSuggestions = []
+                return
+            }
+            searchSuggestions = speciesNames.filter(function (name) {
+                return name.indexOf(query) === 0
+            }).slice(0, 7)
+        }
+
         function calculateTeamAnalysis() {
             if (!currentTeam || currentTeam.length === 0) {
                 teamWeaknesses = []
@@ -172,7 +188,6 @@ PlasmoidItem {
                 "Fairy": ["Poison", "Steel"]
             }
 
-            // Standard offensive super-effective mapping (Attacking Type -> Target Types hit 2x)
             const offenseChart = {
                 "Normal": [],
                 "Fire": ["Grass", "Ice", "Bug", "Steel"],
@@ -213,18 +228,6 @@ PlasmoidItem {
                     }
                 }
 
-                // Check moves for offensive coverage
-                const moves = member.moves || []
-                for (let m = 0; m < moves.length; ++m) {
-                    let moveType = moves[m].classLabel ? moves[m].classLabel : ""
-                    // Infer attack type based on name or category if type isn't stored, 
-                    // but we can map standard move elements. Let's check move description or class if available,
-                    // or fall back to member's own type if move matches type.
-                    // For simplicity and accuracy, let's map common move names or use member types if move matches.
-                    // Even better: check if move name contains element keywords or use member's primary/secondary type.
-                }
-
-                // Fallback / standard coverage based on member's own types acting offensively
                 for (let t = 0; t < mTypes.length; ++t) {
                     let tName = titleCase(mTypes[t])
                     let superEffectiveAgainst = offenseChart[tName] || []
@@ -271,8 +274,6 @@ PlasmoidItem {
             teamOffensiveCoverage = covRes
         }
 
-        property var teamOffensiveCoverage: []
-
         function syncSelectionWithLoadedPokemon() {
             if (!pokemonName)
                 return
@@ -306,10 +307,6 @@ PlasmoidItem {
             }
             syncSelectionWithLoadedPokemon()
             calculateTeamAnalysis()
-        }
-
-        function calculateTeamAnalysis() {
-            calculateTeamWeaknesses()
         }
 
         function saveCurrentTeam() {
@@ -540,23 +537,6 @@ PlasmoidItem {
                 popup.suggestionError = "Suggestions unavailable."
             }
             xhr.send()
-        }
-
-        property string suggestionError: ""
-
-        function updateSuggestions(input) {
-            if (!searchEdited) {
-                searchSuggestions = []
-                return
-            }
-            const query = input.trim().toLowerCase().replace(/\s+/g, "-")
-            if (query.length < 2) {
-                searchSuggestions = []
-                return
-            }
-            searchSuggestions = speciesNames.filter(function (name) {
-                return name.indexOf(query) === 0
-            }).slice(0, 7)
         }
 
         function parseEvolution(node) {
