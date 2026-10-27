@@ -73,6 +73,7 @@ PlasmoidItem {
         property int activeTeamSlot: 1
         property var currentTeam: []
         property int selectedMemberIndex: -1
+        property var teamWeaknesses: []
 
         Component.onCompleted: {
             initTeamDatabase()
@@ -96,6 +97,115 @@ PlasmoidItem {
             }
         }
 
+        function calculateTeamWeaknesses() {
+            if (!currentTeam || currentTeam.length === 0) {
+                teamWeaknesses = []
+                return
+            }
+
+            const allTypes = [
+                "normal", "fire", "water", "electric", "grass", "ice", "fighting", "poison", "ground",
+                "flying", "psychic", "bug", "rock", "ghost", "dragon", "dark", "steel", "fairy"
+            ]
+
+            // We will fetch type damage relations asynchronously or use cached data if available.
+            // For a robust implementation, we query PokéAPI for each member's types.
+            let weaknessCounts = {}
+            for (let t = 0; t < allTypes.length; ++t) {
+                weaknessCounts[allTypes[t]] = 0
+            }
+
+            let membersProcessed = 0
+            for (let i = 0; i < currentTeam.length; ++i) {
+                const memberTypes = currentTeam[i].types || []
+                if (memberTypes.length === 0) {
+                    membersProcessed++
+                    if (membersProcessed === currentTeam.length) finalizeWeaknesses(weaknessCounts)
+                    continue
+                }
+
+                // Query type effectiveness for this member
+                let memberMults = {}
+                for (let t = 0; t < allTypes.length; ++t) memberMults[allTypes[t]] = 1
+
+                let typesRemaining = memberTypes.length
+                for (let mt = 0; mt < memberTypes.length; ++mt) {
+                    const tName = memberTypes[mt].toLowerCase()
+                    const xhr = new XMLHttpRequest()
+                    xhr.open("GET", "https://pokeapi.co/api/v2/type/" + tName)
+                    xhr.setRequestHeader("Accept", "application/json")
+                    xhr.onreadystatechange = function() {
+                        if (xhr.readyState !== XMLHttpRequest.DONE) return
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                            try {
+                                const data = JSON.parse(xhr.responseText)
+                                const rel = data.damage_relations
+                                const doubleFrom = rel.double_damage_from || []
+                                const halfFrom = rel.half_damage_from || []
+                                const noFrom = rel.no_damage_from || []
+
+                                for (let d = 0; d < doubleFrom.length; ++d) {
+                                    memberMults[doubleFrom[d].name] *= 2
+                                }
+                                for (let h = 0; h < halfFrom.length; ++h) {
+                                    memberMults[halfFrom[h].name] *= 0.5
+                                }
+                                for (let n = 0; n < noFrom.length; ++n) {
+                                    memberMults[noFrom[n].name] *= 0
+                                }
+                            } catch (e) {}
+                        }
+                        typesRemaining--
+                        if (typesRemaining === 0) {
+                            // Tally weaknesses (> 1x) for this member
+                            for (let t = 0; t < allTypes.length; ++t) {
+                                if (memberMults[allTypes[t]] > 1) {
+                                    weaknessCounts[allTypes[t]] = (weaknessCounts[allTypes[t]] || 0) + 1
+                                }
+                            }
+                            membersProcessed++
+                            if (membersProcessed === currentTeam.length) {
+                                finalizeWeaknesses(weaknessCounts)
+                            }
+                        }
+                    }
+                    xhr.send()
+                }
+            }
+        }
+
+        function finalizeWeaknesses(counts) {
+            let res = []
+            for (let type in counts) {
+                if (counts[type] > 0) {
+                    res.push({
+                        name: titleCase(type),
+                        count: counts[type],
+                        color: typeColor(type),
+                        textColor: typeTextColor(type)
+                    })
+                }
+            }
+            res.sort(function(a, b) { return b.count - a.count })
+            teamWeaknesses = res
+        }
+
+        function syncSelectionWithLoadedPokemon() {
+            if (!pokemonName)
+                return
+            if (selectedMemberIndex >= 0 && selectedMemberIndex < currentTeam.length) {
+                if (currentTeam[selectedMemberIndex].name.toLowerCase() === pokemonName.toLowerCase())
+                    return
+            }
+            for (let i = 0; i < currentTeam.length; ++i) {
+                if (currentTeam[i].name.toLowerCase() === pokemonName.toLowerCase()) {
+                    selectedMemberIndex = i
+                    return
+                }
+            }
+            selectedMemberIndex = -1
+        }
+
         function loadTeamSlot(slotNum) {
             activeTeamSlot = slotNum
             try {
@@ -111,7 +221,8 @@ PlasmoidItem {
             } catch (e) {
                 currentTeam = []
             }
-            selectedMemberIndex = currentTeam.length > 0 ? 0 : -1
+            syncSelectionWithLoadedPokemon()
+            calculateTeamWeaknesses()
         }
 
         function saveCurrentTeam() {
@@ -121,6 +232,7 @@ PlasmoidItem {
                     tx.executeSql('INSERT OR REPLACE INTO team_slots (slot, data) VALUES (?, ?);',
                         [activeTeamSlot, JSON.stringify(currentTeam)])
                 })
+                calculateTeamWeaknesses()
             } catch (e) {
                 console.log("Save Error: " + e)
             }
@@ -130,13 +242,17 @@ PlasmoidItem {
             if (!pokemonName || currentTeam.length >= 6)
                 return
             let nextTeam = currentTeam.slice()
+            let cleanSlug = pokemonName.toLowerCase().replace(/\s+/g, "-")
             nextTeam.push({
                 name: pokemonName,
-                sprite: spriteUrl,
+                types: JSON.parse(JSON.stringify(types)),
+                sprite: spriteUrl.length > 0 ? spriteUrl : spriteForName(cleanSlug),
+                fallbackSprite: spriteForName(cleanSlug),
                 moves: []
             })
             currentTeam = nextTeam
             selectedMemberIndex = currentTeam.length - 1
+            errorText = ""
             saveCurrentTeam()
         }
 
@@ -146,17 +262,21 @@ PlasmoidItem {
             let nextTeam = currentTeam.slice()
             nextTeam.splice(idx, 1)
             currentTeam = nextTeam
-            if (selectedMemberIndex >= currentTeam.length) {
-                selectedMemberIndex = currentTeam.length - 1
-            }
+            syncSelectionWithLoadedPokemon()
             saveCurrentTeam()
         }
 
         function addMoveToActiveMember(moveObj) {
             if (selectedMemberIndex < 0 || selectedMemberIndex >= currentTeam.length)
                 return
+
             let nextTeam = JSON.parse(JSON.stringify(currentTeam))
             let member = nextTeam[selectedMemberIndex]
+
+            if (member.name.toLowerCase() !== pokemonName.toLowerCase()) {
+                return
+            }
+
             if (!member.moves)
                 member.moves = []
             if (member.moves.length >= 4)
@@ -201,7 +321,7 @@ PlasmoidItem {
         }
 
         function spriteForName(name) {
-            return "https://img.pokemondb.net/sprites/home/normal/" + name + ".png"
+            return "https://img.pokemondb.net/sprites/home/normal/" + name.toLowerCase().replace(/\s+/g, "-") + ".png"
         }
 
         function typeColor(typeName) {
@@ -378,7 +498,7 @@ PlasmoidItem {
             return result
         }
 
-        function loadPokemon(input) {
+        function loadPokemon(input, targetSlotIndex) {
             let normalized = input.trim().toLowerCase()
             if (normalized.startsWith("#")) {
                 normalized = parseInt(normalized.substring(1), 10).toString()
@@ -445,6 +565,12 @@ PlasmoidItem {
                     evTotal += stats[i].ev
                 }
                 totalEvYield = evTotal
+
+                if (targetSlotIndex !== undefined && targetSlotIndex >= 0 && targetSlotIndex < currentTeam.length) {
+                    selectedMemberIndex = targetSlotIndex
+                } else {
+                    syncSelectionWithLoadedPokemon()
+                }
                 
                 const versionToGenMap = {
                     "red-blue": "Gen 1", "yellow": "Gen 1",
@@ -603,9 +729,12 @@ PlasmoidItem {
                 }
 
                 const speciesName = pokemon.species.name
-                const fileName = speciesName
-                spriteUrl = "https://img.pokemondb.net/sprites/home/normal/" + fileName + ".png"
-                shinyUrl = "https://img.pokemondb.net/sprites/home/shiny/" + fileName + ".png"
+                spriteUrl = (pokemon.sprites && pokemon.sprites.front_default)
+                    ? pokemon.sprites.front_default
+                    : "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/" + pokemon.id + ".png"
+                shinyUrl = (pokemon.sprites && pokemon.sprites.front_shiny)
+                    ? pokemon.sprites.front_shiny
+                    : "https://img.pokemondb.net/sprites/home/shiny/" + speciesName + ".png"
                 animatedUrl = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/showdown/" + pokemon.id + ".gif"
                 animatedShinyUrl = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/showdown/shiny/" + pokemon.id + ".gif"
                 
@@ -1336,8 +1465,10 @@ PlasmoidItem {
                                     color: popup.isDarkMode ? "#ffffff" : "#171717"
                                 }
                                 Label {
-                                    visible: popup.selectedMemberIndex >= 0 && popup.selectedMemberIndex < popup.currentTeam.length
-                                    text: "Click move → " + (popup.selectedMemberIndex >= 0 && popup.selectedMemberIndex < popup.currentTeam.length ? popup.currentTeam[popup.selectedMemberIndex].name : "")
+                                    visible: popup.selectedMemberIndex >= 0
+                                        && popup.selectedMemberIndex < popup.currentTeam.length
+                                        && popup.currentTeam[popup.selectedMemberIndex].name.toLowerCase() === popup.pokemonName.toLowerCase()
+                                    text: "Click move → " + popup.pokemonName + " (Slot " + (popup.selectedMemberIndex + 1) + ")"
                                     font.pixelSize: 10
                                     color: "#e53935"
                                     font.bold: true
@@ -1411,7 +1542,11 @@ PlasmoidItem {
                                             ToolTip.text: modelData.classLabel + " · " + modelData.method + 
                                                           "\nPower: " + modelData.power + " | Accuracy: " + modelData.accuracy + 
                                                           "\n" + modelData.description +
-                                                          (popup.selectedMemberIndex >= 0 ? "\n\nClick to add to " + popup.currentTeam[popup.selectedMemberIndex].name : "")
+                                                          ((popup.selectedMemberIndex >= 0
+                                                            && popup.selectedMemberIndex < popup.currentTeam.length
+                                                            && popup.currentTeam[popup.selectedMemberIndex].name.toLowerCase() === popup.pokemonName.toLowerCase())
+                                                            ? "\n\nClick to add to " + popup.currentTeam[popup.selectedMemberIndex].name + " (Slot " + (popup.selectedMemberIndex + 1) + ")"
+                                                            : "\n\n(Select this Pokémon in your team below to assign moves)")
                                             onClicked: popup.addMoveToActiveMember(modelData)
                                         }
                                     }
@@ -1500,12 +1635,13 @@ PlasmoidItem {
                                 Repeater {
                                     model: 6
                                     delegate: Rectangle {
+                                        id: slotCard
                                         required property int index
                                         readonly property bool hasMember: index < popup.currentTeam.length
                                         readonly property var member: hasMember ? popup.currentTeam[index] : null
                                         readonly property bool isSelected: index === popup.selectedMemberIndex
                                         Layout.fillWidth: true
-                                        Layout.preferredHeight: 62
+                                        Layout.preferredHeight: 64
                                         radius: 6
                                         color: hasMember
                                             ? (popup.isDarkMode ? "#242424" : "#f7f7f7")
@@ -1517,7 +1653,7 @@ PlasmoidItem {
 
                                         // Empty Slot View
                                         Label {
-                                            visible: !parent.hasMember
+                                            visible: !slotCard.hasMember
                                             anchors.centerIn: parent
                                             text: "+"
                                             font.pixelSize: 20
@@ -1527,26 +1663,39 @@ PlasmoidItem {
 
                                         // Occupied Slot View
                                         Column {
-                                            visible: parent.hasMember
+                                            visible: slotCard.hasMember
                                             anchors.centerIn: parent
                                             spacing: 1
 
                                             Image {
+                                                id: memberSpriteImg
                                                 anchors.horizontalCenter: parent.horizontalCenter
-                                                width: 36
-                                                height: 36
-                                                source: parent.member ? parent.member.sprite : ""
+                                                width: 40
+                                                height: 40
+                                                source: slotCard.member
+                                                    ? (slotCard.member.sprite && slotCard.member.sprite.length > 0
+                                                        ? slotCard.member.sprite
+                                                        : popup.spriteForName(slotCard.member.name))
+                                                    : ""
                                                 fillMode: Image.PreserveAspectFit
                                                 asynchronous: true
                                                 cache: true
+                                                onStatusChanged: {
+                                                    if (status === Image.Error && slotCard.member) {
+                                                        const fallback = slotCard.member.fallbackSprite || popup.spriteForName(slotCard.member.name)
+                                                        if (source != fallback) {
+                                                            source = fallback
+                                                        }
+                                                    }
+                                                }
                                             }
 
                                             Label {
-                                                width: 52
-                                                text: parent.member ? parent.member.name : ""
+                                                width: 54
+                                                text: slotCard.member ? slotCard.member.name : ""
                                                 horizontalAlignment: Text.AlignHCenter
                                                 font.pixelSize: 9
-                                                font.bold: parent.isSelected
+                                                font.bold: slotCard.isSelected
                                                 elide: Text.ElideRight
                                                 color: popup.isDarkMode ? "#ffffff" : "#171717"
                                             }
@@ -1558,28 +1707,26 @@ PlasmoidItem {
                                             hoverEnabled: true
                                             ToolTip.visible: containsMouse
                                             ToolTip.delay: 200
-                                            ToolTip.text: parent.hasMember
-                                                ? (parent.member.name + " (" + (parent.member.moves ? parent.member.moves.length : 0) + "/4 moves)\nClick to edit moves · Double-click to load")
-                                                : ("Add " + popup.pokemonName + " to slot " + (index + 1))
+                                            ToolTip.text: slotCard.hasMember
+                                                ? (slotCard.member.name + " (" + (slotCard.member.moves ? slotCard.member.moves.length : 0) + "/4 moves)\nClick to load & edit moves")
+                                                : ("Add " + popup.pokemonName + " to slot " + (slotCard.index + 1))
                                             onClicked: {
-                                                if (parent.hasMember) {
-                                                    popup.selectedMemberIndex = index
+                                                if (slotCard.hasMember) {
+                                                    popup.selectedMemberIndex = slotCard.index
+                                                    if (popup.pokemonName.toLowerCase() !== slotCard.member.name.toLowerCase()) {
+                                                        searchField.text = slotCard.member.name
+                                                        popup.searchEdited = false
+                                                        popup.loadPokemon(slotCard.member.name, slotCard.index)
+                                                    }
                                                 } else {
                                                     popup.addPokemonToTeam()
-                                                }
-                                            }
-                                            onDoubleClicked: {
-                                                if (parent.hasMember) {
-                                                    searchField.text = parent.member.name
-                                                    popup.searchEdited = false
-                                                    popup.loadPokemon(parent.member.name)
                                                 }
                                             }
                                         }
 
                                         // Quick Remove "✕" Badge
                                         Rectangle {
-                                            visible: parent.hasMember
+                                            visible: slotCard.hasMember
                                             anchors.top: parent.top
                                             anchors.right: parent.right
                                             anchors.margins: 3
@@ -1599,7 +1746,7 @@ PlasmoidItem {
                                             MouseArea {
                                                 anchors.fill: parent
                                                 cursorShape: Qt.PointingHandCursor
-                                                onClicked: popup.removePokemonFromTeam(index)
+                                                onClicked: popup.removePokemonFromTeam(slotCard.index)
                                             }
                                         }
                                     }
@@ -1684,6 +1831,45 @@ PlasmoidItem {
                                                                   "\n\nClick to remove"
                                                     onClicked: popup.removeMoveFromActiveMember(index)
                                                 }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // --- TEAM TYPE WEAKNESS SUMMARY ---
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                visible: popup.teamWeaknesses.length > 0
+                                spacing: 4
+
+                                Kirigami.Heading {
+                                    text: "Team Weaknesses (2×+)"
+                                    level: 3
+                                    color: popup.isDarkMode ? "#ffffff" : "#171717"
+                                }
+
+                                Flow {
+                                    Layout.fillWidth: true
+                                    spacing: 4
+                                    Repeater {
+                                        model: popup.teamWeaknesses
+                                        delegate: Rectangle {
+                                            required property var modelData
+                                            radius: 4
+                                            height: weakLbl.implicitHeight + 6
+                                            width: weakLbl.implicitWidth + 10
+                                            color: modelData.color
+                                            border.color: "#222222"
+                                            border.width: 1
+
+                                            Label {
+                                                id: weakLbl
+                                                anchors.centerIn: parent
+                                                text: modelData.name + " (" + modelData.count + ")"
+                                                color: modelData.textColor
+                                                font.bold: true
+                                                font.pixelSize: 10
                                             }
                                         }
                                     }
