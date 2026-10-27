@@ -344,16 +344,25 @@ PlasmoidItem {
                             let methodRaw = detail.move_learn_method.name
                             let level = detail.level_learned_at || 0
 
-                            let existsObj = tempCategorized[genName].find(function(item) { return item.name === moveName })
-                            if (!existsObj) {
+                            // Check if move already exists in this generation
+                            let existingIndex = -1
+                            for (let idx = 0; idx < tempCategorized[genName].length; idx++) {
+                                if (tempCategorized[genName][idx].name === moveName) {
+                                    existingIndex = idx
+                                    break
+                                }
+                            }
+
+                            // If it doesn't exist, or if this new method is "level-up" (which we prioritize over TMs/eggs)
+                            if (existingIndex === -1) {
                                 pendingMovesCount++
-                                (function(targetGen, mvName, learnMethod, lvl, url) {
+                                (function(targetGen, mvName, learnMethod, lvl, url, indexToReplace) {
                                     const mxhr = new XMLHttpRequest()
                                     mxhr.open("GET", url)
                                     mxhr.setRequestHeader("Accept", "application/json")
                                     mxhr.onreadystatechange = function () {
                                         if (mxhr.readyState !== XMLHttpRequest.DONE) return
-                                        let classColor = "#a8a878" // Default Status fallback
+                                        let classColor = "#a8a878"
                                         let classType = "Status"
                                         if (mxhr.status >= 200 && mxhr.status < 300) {
                                             try {
@@ -376,14 +385,20 @@ PlasmoidItem {
                                             formattedDisplay = mvName + " · Lv. " + lvl
                                         }
 
-                                        targetGen.push({
+                                        let newMoveObj = {
                                             name: mvName,
                                             displayText: formattedDisplay,
                                             method: titleCase(learnMethod.replace(/-/g, " ")),
                                             level: lvl,
                                             bgColor: classColor,
                                             classLabel: classType
-                                        })
+                                        }
+
+                                        if (indexToReplace !== -1) {
+                                            targetGen[indexToReplace] = newMoveObj
+                                        } else {
+                                            targetGen.push(newMoveObj)
+                                        }
 
                                         pendingMovesCount--
                                         if (pendingMovesCount === 0) {
@@ -391,7 +406,13 @@ PlasmoidItem {
                                         }
                                     }
                                     mxhr.send()
-                                })(tempCategorized[genName], moveName, methodRaw, level, moveUrl)
+                                })(tempCategorized[genName], moveName, methodRaw, level, moveUrl, existingIndex)
+                            } else if (methodRaw === "level-up" && tempCategorized[genName][existingIndex].method !== "Level Up") {
+                                // Upgrade existing non-level-up entry to level-up entry
+                                let formattedDisplay = moveName + (level > 0 ? " · Lv. " + level : "")
+                                tempCategorized[genName][existingIndex].method = "Level Up"
+                                tempCategorized[genName][existingIndex].level = level
+                                tempCategorized[genName][existingIndex].displayText = formattedDisplay
                             }
                         }
                     }
