@@ -425,17 +425,25 @@ PlasmoidItem {
                     for (let i = 1; i <= 9; ++i) {
                         let g = "Gen " + i
                         if (tempCategorized[g].length > 0) {
-                            // Sort strictly: Level-up moves first, ordered from lowest to highest level
                             tempCategorized[g].sort(function(a, b) {
                                 let aIsLevel = (a.method === "Level Up")
                                 let bIsLevel = (b.method === "Level Up")
 
+                                // 1. If both are Level Up moves, sort strictly lowest level to highest level
                                 if (aIsLevel && bIsLevel) {
                                     return a.level - b.level
                                 }
+                                // 2. Force Level Up moves to the absolute top of the list (-1)
                                 if (aIsLevel) return -1
                                 if (bIsLevel) return 1
-                                
+
+                                // 3. Sort Machine (TM) moves next
+                                let aIsMachine = (a.method === "Machine")
+                                let bIsMachine = (b.method === "Machine")
+                                if (aIsMachine && !bIsMachine) return -1
+                                if (!aIsMachine && bIsMachine) return 1
+
+                                // 4. Alphabetical fallback for everything else
                                 return a.name.localeCompare(b.name)
                             })
                             gens.push(g)
