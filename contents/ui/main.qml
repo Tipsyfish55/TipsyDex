@@ -593,12 +593,31 @@ PlasmoidItem {
                             color: "#ffffff"
                         }
 
-                        ToolButton {
-                            icon.name: popup.isDarkMode ? "weather-clear" : "weather-clear-night"
-                            display: AbstractButton.IconOnly
-                            Accessible.name: "Toggle Dark Mode"
-                            ToolTip.text: popup.isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"
-                            onClicked: popup.isDarkMode = !popup.isDarkMode
+                        Row {
+                            spacing: 2
+                            Layout.alignment: Qt.AlignVCenter
+
+                            ToolButton {
+                                icon.name: "weather-clear"
+                                display: AbstractButton.IconOnly
+                                Accessible.name: "Light Mode"
+                                ToolTip.text: "Light Mode"
+                                opacity: popup.isDarkMode ? 0.4 : 1.0
+                                implicitWidth: 28
+                                implicitHeight: 28
+                                onClicked: popup.isDarkMode = false
+                            }
+
+                            ToolButton {
+                                icon.name: "weather-clear-night"
+                                display: AbstractButton.IconOnly
+                                Accessible.name: "Dark Mode"
+                                ToolTip.text: "Dark Mode"
+                                opacity: popup.isDarkMode ? 1.0 : 0.4
+                                implicitWidth: 28
+                                implicitHeight: 28
+                                onClicked: popup.isDarkMode = true
+                            }
                         }
                     }
 
