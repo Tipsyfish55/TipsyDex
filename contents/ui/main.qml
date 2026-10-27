@@ -29,9 +29,12 @@ PlasmoidItem {
         id: popup
         implicitWidth: 210
         implicitHeight: 570
-        color: Kirigami.Theme.backgroundColor
+        
+        property bool isDarkMode: false
+
+        color: isDarkMode ? "#181818" : Kirigami.Theme.backgroundColor
         radius: Kirigami.Units.largeSpacing
-        border.color: "#111111"
+        border.color: isDarkMode ? "#333333" : "#111111"
         border.width: 2
         clip: true
 
@@ -61,7 +64,7 @@ PlasmoidItem {
         property var learnableMoves: []
 
         Component.onCompleted: {
-            loadPokemon("pikachu")
+            loadPokemon("charmander")
             loadSpeciesNames()
         }
 
@@ -429,20 +432,15 @@ PlasmoidItem {
                                 let aHasLevel = (a.level > 0 || a.method.toLowerCase().includes("level"));
                                 let bHasLevel = (b.level > 0 || b.method.toLowerCase().includes("level"));
 
-                                // 1. Both have levels: sort numerically lowest to highest level
                                 if (aHasLevel && bHasLevel) {
                                     return a.level - b.level;
                                 }
-                                // 2. 'a' has a level, 'b' does not -> 'a' goes to the top
                                 if (aHasLevel) {
                                     return -1;
                                 }
-                                // 3. 'b' has a level, 'a' does not -> 'b' goes to the top
                                 if (bHasLevel) {
                                     return 1;
                                 }
-
-                                // 4. Alphabetical fallback for everything else
                                 return a.name.localeCompare(b.name);
                             });
                             gens.push(g)
@@ -594,6 +592,14 @@ PlasmoidItem {
                             Layout.fillWidth: true
                             color: "#ffffff"
                         }
+
+                        ToolButton {
+                            icon.name: popup.isDarkMode ? "weather-clear" : "weather-clear-night"
+                            display: AbstractButton.IconOnly
+                            Accessible.name: "Toggle Dark Mode"
+                            ToolTip.text: popup.isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"
+                            onClicked: popup.isDarkMode = !popup.isDarkMode
+                        }
                     }
 
                     RowLayout {
@@ -602,13 +608,13 @@ PlasmoidItem {
                         TextField {
                             id: searchField
                             Layout.fillWidth: true
-                            text: "pikachu"
+                            text: "charmander"
                             leftPadding: 38
                             placeholderText: "Search Name or #ID…"
                             focus: true
-                            palette.text: "#171717"
-                            palette.placeholderText: "#666666"
-                            palette.base: "#ffffff"
+                            palette.text: popup.isDarkMode ? "#ffffff" : "#171717"
+                            palette.placeholderText: popup.isDarkMode ? "#aaaaaa" : "#666666"
+                            palette.base: popup.isDarkMode ? "#2d2d2d" : "#ffffff"
                             onAccepted: popup.loadPokemon(text)
                             onTextEdited: {
                                 popup.searchEdited = true
@@ -659,6 +665,9 @@ PlasmoidItem {
                             required property string modelData
                             width: suggestionList.width
                             height: 34
+                            background: Rectangle {
+                                color: popup.isDarkMode ? "#2a2a2a" : "#ffffff"
+                            }
                             contentItem: RowLayout {
                                 spacing: Kirigami.Units.smallSpacing
 
@@ -675,6 +684,7 @@ PlasmoidItem {
                                     text: popup.titleCase(modelData)
                                     verticalAlignment: Text.AlignVCenter
                                     elide: Text.ElideRight
+                                    color: popup.isDarkMode ? "#ffffff" : "#171717"
                                 }
                             }
                             onClicked: {
@@ -715,14 +725,14 @@ PlasmoidItem {
                     anchors.right: parent.right
                     anchors.bottom: parent.bottom
                     height: 2
-                    color: "#111111"
+                    color: popup.isDarkMode ? "#333333" : "#111111"
                 }
             }
 
             Rectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                color: "#ffffff"
+                color: popup.isDarkMode ? "#181818" : "#ffffff"
 
                 ColumnLayout {
                     anchors.fill: parent
@@ -746,7 +756,7 @@ PlasmoidItem {
                             interactive: true
                         }
                         background: Rectangle {
-                            color: "#ffffff"
+                            color: popup.isDarkMode ? "#181818" : "#ffffff"
                         }
 
                         ColumnLayout {
@@ -767,11 +777,11 @@ PlasmoidItem {
                                         Layout.fillWidth: true
                                         Layout.minimumWidth: 0
                                         elide: Text.ElideRight
-                                        color: "#171717"
+                                        color: popup.isDarkMode ? "#ffffff" : "#171717"
                                     }
                                     Label {
                                         text: popup.pokemonId
-                                        color: "#555555"
+                                        color: popup.isDarkMode ? "#aaaaaa" : "#555555"
                                     }
                                     Flow {
                                         Layout.fillWidth: true
@@ -832,7 +842,7 @@ PlasmoidItem {
                                 Kirigami.Heading {
                                     text: "Type defenses"
                                     level: 3
-                                    color: "#171717"
+                                    color: popup.isDarkMode ? "#ffffff" : "#171717"
                                 }
 
                                 Flow {
@@ -864,7 +874,7 @@ PlasmoidItem {
                                 }
                                 Label {
                                     text: "Damage taken; neutral types omitted."
-                                    color: "#555555"
+                                    color: popup.isDarkMode ? "#aaaaaa" : "#555555"
                                     font.pixelSize: Kirigami.Theme.smallFont.pixelSize
                                 }
                             }
@@ -876,7 +886,7 @@ PlasmoidItem {
                                 wrapMode: Text.Wrap
                                 maximumLineCount: 2
                                 elide: Text.ElideRight
-                                color: "#171717"
+                                color: popup.isDarkMode ? "#ffffff" : "#171717"
                             }
 
                             RowLayout {
@@ -884,11 +894,11 @@ PlasmoidItem {
                                 Label {
                                     text: popup.heightText
                                     Layout.fillWidth: true
-                                    color: "#171717"
+                                    color: popup.isDarkMode ? "#ffffff" : "#171717"
                                 }
                                 Label {
                                     text: popup.weightText
-                                    color: "#555555"
+                                    color: popup.isDarkMode ? "#aaaaaa" : "#555555"
                                 }
                             }
 
@@ -902,11 +912,11 @@ PlasmoidItem {
                                     text: "Stats"
                                     level: 2
                                     Layout.fillWidth: true
-                                    color: "#171717"
+                                    color: popup.isDarkMode ? "#ffffff" : "#171717"
                                 }
                                 Label {
                                     text: "EV yield " + popup.totalEvYield
-                                    color: "#555555"
+                                    color: popup.isDarkMode ? "#aaaaaa" : "#555555"
                                 }
                             }
 
@@ -921,19 +931,19 @@ PlasmoidItem {
                                     text: "BASE"
                                     Layout.fillWidth: true
                                     font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                    color: "#555555"
+                                    color: popup.isDarkMode ? "#aaaaaa" : "#555555"
                                 }
                                 Label {
                                     text: "EV"
                                     Layout.preferredWidth: 32
                                     font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                    color: "#555555"
+                                    color: popup.isDarkMode ? "#aaaaaa" : "#555555"
                                 }
                                 Label {
                                     text: "IV"
                                     Layout.preferredWidth: 38
                                     font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                    color: "#555555"
+                                    color: popup.isDarkMode ? "#aaaaaa" : "#555555"
                                 }
                             }
 
@@ -948,7 +958,7 @@ PlasmoidItem {
                                         text: modelData.name
                                         Layout.preferredWidth: 36
                                         font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                        color: "#171717"
+                                        color: popup.isDarkMode ? "#ffffff" : "#171717"
                                     }
                                     Item {
                                         Layout.fillWidth: true
@@ -956,13 +966,13 @@ PlasmoidItem {
                                         Rectangle {
                                             anchors.fill: parent
                                             radius: height / 2
-                                            color: "#e5e5e5"
+                                            color: popup.isDarkMode ? "#2d2d2d" : "#e5e5e5"
                                         }
                                         Rectangle {
                                             width: parent.width * modelData.base / 255
                                             height: parent.height
                                             radius: height / 2
-                                            color: "#78a9e6"
+                                            color: popup.isDarkMode ? "#5c93e8" : "#78a9e6"
                                             opacity: 0.8
                                         }
                                         Label {
@@ -972,7 +982,7 @@ PlasmoidItem {
                                             verticalAlignment: Text.AlignVCenter
                                             font.bold: true
                                             font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                            color: "#171717"
+                                            color: popup.isDarkMode ? "#ffffff" : "#171717"
                                         }
                                     }
                                     Item {
@@ -981,13 +991,13 @@ PlasmoidItem {
                                         Rectangle {
                                             anchors.fill: parent
                                             radius: height / 2
-                                            color: "#e5e5e5"
+                                            color: popup.isDarkMode ? "#2d2d2d" : "#e5e5e5"
                                         }
                                         Rectangle {
                                             width: modelData.ev ? Math.max(parent.width * modelData.ev / 3, 14) : 0
                                             height: parent.height
                                             radius: height / 2
-                                            color: "#a6ce83"
+                                            color: popup.isDarkMode ? "#7cc965" : "#a6ce83"
                                             opacity: 0.8
                                         }
                                         Label {
@@ -997,7 +1007,7 @@ PlasmoidItem {
                                             verticalAlignment: Text.AlignVCenter
                                             font.bold: true
                                             font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                            color: "#171717"
+                                            color: popup.isDarkMode ? "#ffffff" : "#171717"
                                         }
                                     }
                                     Item {
@@ -1006,12 +1016,12 @@ PlasmoidItem {
                                         Rectangle {
                                             anchors.fill: parent
                                             radius: height / 2
-                                            color: "#e5e5e5"
+                                            color: popup.isDarkMode ? "#2d2d2d" : "#e5e5e5"
                                         }
                                         Rectangle {
                                             anchors.fill: parent
                                             radius: height / 2
-                                            color: "#c5a5d8"
+                                            color: popup.isDarkMode ? "#a07cc5" : "#c5a5d8"
                                         }
                                         Label {
                                             anchors.fill: parent
@@ -1020,7 +1030,7 @@ PlasmoidItem {
                                             verticalAlignment: Text.AlignVCenter
                                             font.bold: true
                                             font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                            color: "#171717"
+                                            color: popup.isDarkMode ? "#ffffff" : "#171717"
                                         }
                                     }
                                 }
@@ -1030,19 +1040,19 @@ PlasmoidItem {
                                 text: "EV is gained by defeating this Pokémon. IVs are individual values: each stat can range from 0 to 31."
                                 Layout.fillWidth: true
                                 wrapMode: Text.Wrap
-                                color: "#555555"
+                                color: popup.isDarkMode ? "#aaaaaa" : "#555555"
                                 font.pixelSize: Kirigami.Theme.smallFont.pixelSize
                             }
 
                             Kirigami.Separator {
                                 Layout.fillWidth: true
-                                color: "#777777"
+                                color: popup.isDarkMode ? "#333333" : "#777777"
                             }
 
                             Kirigami.Heading {
                                 text: "Evolution"
                                 level: 2
-                                color: "#171717"
+                                color: popup.isDarkMode ? "#ffffff" : "#171717"
                             }
 
                             Repeater {
@@ -1064,7 +1074,7 @@ PlasmoidItem {
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 Label {
                                                     text: "-"
-                                                    color: "#555555"
+                                                    color: popup.isDarkMode ? "#aaaaaa" : "#555555"
                                                     anchors.verticalCenter: parent.verticalCenter
                                                 }
                                                 Image {
@@ -1087,7 +1097,7 @@ PlasmoidItem {
                                                     text: popup.shortRequirement(modelData.requirements)
                                                     width: Math.min(implicitWidth, 46)
                                                     elide: Text.ElideRight
-                                                    color: "#555555"
+                                                    color: popup.isDarkMode ? "#aaaaaa" : "#555555"
                                                     font.pixelSize: Kirigami.Theme.smallFont.pixelSize
                                                     anchors.verticalCenter: parent.verticalCenter
                                                 }
@@ -1116,7 +1126,7 @@ PlasmoidItem {
                                                     font.pixelSize: Kirigami.Theme.smallFont.pixelSize
                                                     font.bold: modelData.name === popup.pokemonName.toLowerCase()
                                                     elide: Text.ElideRight
-                                                    color: "#171717"
+                                                    color: popup.isDarkMode ? "#ffffff" : "#171717"
                                                 }
                                             }
                                         }
@@ -1126,13 +1136,13 @@ PlasmoidItem {
 
                             Kirigami.Separator {
                                 Layout.fillWidth: true
-                                color: "#777777"
+                                color: popup.isDarkMode ? "#333333" : "#777777"
                             }
                             
                             Kirigami.Heading {
                                 text: "Moves"
                                 level: 2
-                                color: "#171717"
+                                color: popup.isDarkMode ? "#ffffff" : "#171717"
                             }
 
                             Flow {
@@ -1148,15 +1158,15 @@ PlasmoidItem {
                                         radius: 4
                                         height: genPillLabel.implicitHeight + 6
                                         width: genPillLabel.implicitWidth + 10
-                                        color: isSelected ? "#e53935" : "#eeeeee"
-                                        border.color: isSelected ? "#b71c1c" : "#cccccc"
+                                        color: isSelected ? "#e53935" : (popup.isDarkMode ? "#2d2d2d" : "#eeeeee")
+                                        border.color: isSelected ? "#b71c1c" : (popup.isDarkMode ? "#444444" : "#cccccc")
                                         border.width: 1
 
                                         Label {
                                             id: genPillLabel
                                             anchors.centerIn: parent
                                             text: modelData
-                                            color: parent.isSelected ? "#ffffff" : "#171717"
+                                            color: parent.isSelected ? "#ffffff" : (popup.isDarkMode ? "#ffffff" : "#171717")
                                             font.bold: parent.isSelected
                                             font.pixelSize: Kirigami.Theme.smallFont.pixelSize
                                         }
@@ -1182,7 +1192,7 @@ PlasmoidItem {
                                         height: moveLabel.implicitHeight + 8
                                         width: moveLabel.implicitWidth + 12
                                         color: modelData.bgColor
-                                        border.color: "#222222"
+                                        border.color: popup.isDarkMode ? "#444444" : "#222222"
                                         border.width: 1
 
                                         Label {
